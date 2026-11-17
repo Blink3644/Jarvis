@@ -228,3 +228,25 @@ def test_push_to_talk_interrupts_and_records():
         assert wait_for(lambda: va.state == A.IDLE)
     finally:
         va.stop()
+
+
+def test_long_answer_speaks_first_sentences_rest_on_screen():
+    va, mic, sp, brain, ui = make(["Hey Jarvis, explain it"],
+                                  ["One. Two. Three. Four. Five."], spoken_sentence_limit=2)
+    try:
+        mic.feed(*[SIL] * 5, WAKE, *[SPEECH] * 10, *[SIL] * 12)
+        assert wait_for(lambda: sp.said[-1:] == ["The rest is on screen."])
+        assert sp.said == ["One.", "Two.", "The rest is on screen."]
+    finally:
+        va.stop()
+
+
+def test_muted_mic_ignores_wake_word():
+    va, mic, sp, brain, ui = make(["Hey Jarvis, what time is it?"], ["Noon."])
+    try:
+        va.muted = True
+        mic.feed(*[SIL] * 5, WAKE, *[SPEECH] * 10, *[SIL] * 12)
+        time.sleep(0.5)
+        assert brain.asked == [] and va.state == A.IDLE
+    finally:
+        va.stop()

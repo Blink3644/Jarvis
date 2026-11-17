@@ -53,6 +53,7 @@ DEFAULTS = {
     "overlay_pos": None,              # [x, y] once the user has moved it
     "start_with_windows": False,
     "startup_greeting": "simple",     # off | simple | brief
+    "spoken_sentence_limit": 3,       # reply mode "both": speak this many sentences, rest on screen (0 = all)
 }
 
 PERSONALITIES = ("butler", "casual", "direct")

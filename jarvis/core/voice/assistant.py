@@ -373,7 +373,18 @@ class VoiceAssistant:
             self.ui.reply_text(chunk)
             if speak:
                 for s in splitter.feed(chunk):
-                    self._speak(turn, s)
+                    say_sentence(s)
+
+        # Long answers: speak the first few sentences, the full text stays in the on-screen panel.
+        limit = self.cfg.get("spoken_sentence_limit", 3) if self.cfg.get("reply_mode", "both") == "both" else 0
+        count = {"n": 0, "held": False}
+
+        def say_sentence(s):
+            count["n"] += 1
+            if limit and count["n"] > limit:
+                count["held"] = True
+                return
+            self._speak(turn, s)
 
         def on_notice(msg):
             if turn["cancelled"]:
@@ -394,7 +405,9 @@ class VoiceAssistant:
                 self._speak(turn, reply.text)
         elif speak:
             for s in splitter.flush():
-                self._speak(turn, s)
+                say_sentence(s)
+            if count["held"]:
+                self._speak(turn, "The rest is on screen.")
         self.ui.reply_text("", final=True)
         if "token" in first:
             log.info("latency: speech end -> first text %.2fs", first["token"] - t_end)
