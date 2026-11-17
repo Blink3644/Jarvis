@@ -1,6 +1,6 @@
 ﻿# Jarvis â€” current state
 
-**Stage A1 built; user confirmed a live reply works (2026-11-17).** Rest of checklist pending. Stage A2 not started.
+**Stage A1 built; user confirmed the full checklist passes (2026-11-17).** Stage A2 not started.
 
 - Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`). Tests: `.venv\Scripts\python -m pytest -q` (26 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
