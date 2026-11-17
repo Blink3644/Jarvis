@@ -59,6 +59,7 @@ class VoiceAssistant:
         self.running = False
         self.thread: threading.Thread | None = None
         self.mic_retry_at = 0.0
+        self.muted = False                 # tray "Mute mic": ignore the mic completely
         self.tap = None                    # optional fn(frame) for a level meter
         self.wake_test_until = 0.0         # "Test wake word": report scores instead of acting
         self.wake_test_best = 0.0
@@ -121,6 +122,10 @@ class VoiceAssistant:
             if not self.mic.healthy():
                 self._mic_lost()
             return
+        if self.muted:
+            if self.state != IDLE and self.state != BUSY:
+                self._go_idle()
+            return
         self.ring.append(frame)
         if self.tap:
             try:
@@ -141,6 +146,8 @@ class VoiceAssistant:
 
     def _event(self, ev):
         if ev == "ptt_down":
+            if self.muted:
+                return
             if self.state == MIC_LOST:
                 self._say_now("I can't hear you. The microphone selected in settings isn't connected.")
                 return

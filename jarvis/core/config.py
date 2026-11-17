@@ -39,7 +39,7 @@ DEFAULTS = {
     "never_screenshot": ["1password", "bitwarden", "keepass", "lastpass", "dashlane",
                          "bank", "paypal"],   # window title / exe words that are never captured
     "listen_default_s": 15,
-    "listen_max_s": 120,             # give up on a stuck main model after this (min 10)
+    "listen_max_s": 120,              # hard maximum for listen_to_audio (seconds)
     "hint_words": [],                 # extra words to help speech recognition (names, jargon)
     "tts_voice": "en-GB-RyanNeural",
     "followup_seconds": 5,            # keep listening after a reply; 0 = off
@@ -47,6 +47,12 @@ DEFAULTS = {
     "end_silence_ms": 800,
     "stop_word_enabled": True,        # say "stop" while Jarvis talks to interrupt
     "listen_sound": True,
+    # ---- tray, settings window, on-screen panel (Stage A4) ----
+    "theme": "hud",                   # hud | minimal
+    "overlay_hide_s": 8,              # panel hides this long after a reply
+    "overlay_pos": None,              # [x, y] once the user has moved it
+    "start_with_windows": False,
+    "startup_greeting": "simple",     # off | simple | brief
 }
 
 PERSONALITIES = ("butler", "casual", "direct")

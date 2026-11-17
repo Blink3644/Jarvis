@@ -121,6 +121,10 @@ class Overlay:
     def _put(self, *job):
         self.q.put(job)
 
+    def call(self, fn):
+        """Run fn() on the panel's Tk thread (used to open the settings window)."""
+        self._put("call", fn)
+
     def status(self, state):
         self._put("status", state)
 
@@ -257,6 +261,8 @@ class Overlay:
                 self.hider.hold = False
                 self.hider.touch(0)
             self._set_clickthrough()
+        elif kind == "call":
+            job[1]()
         elif kind == "theme":
             self.cfg["theme"] = job[1]
             self._apply_theme()

@@ -1,4 +1,5 @@
-"""Temporary console front end (Stages A1-A2). Run:  python -m jarvis   (add --text for typing only)
+"""Jarvis entry point. Run:  python -m jarvis --gui   (tray + on-screen panel + settings window)
+Console test front end:  python -m jarvis   (add --text for typing only)
 
 Voice runs in the background; you can still type questions and /commands here.
 The tray icon and settings window replace this in Stage A4.
@@ -244,19 +245,38 @@ def voice_command(cmd, arg, cfg, va):
     return True
 
 
+def run_gui(cfg, brain):
+    """Tray icon + on-screen panel + settings window (Stage A4)."""
+    import os
+    if sys.stdout is None:                  # pythonw has no console
+        sys.stdout = sys.stderr = open(os.devnull, "w", encoding="utf-8")
+    from jarvis.core.ui.app import App
+
+    def voice(cfg, brain, ui):
+        va = start_voice(cfg, brain, ui)
+        wire_front_end(ui, va)
+        return va
+    App(cfg, brain, registry, voice).run()
+
+
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
     logs.setup(get_key=secrets.get_api_key)
+    gui = "--gui" in sys.argv
     if not instance.acquire():
-        print("Jarvis is already running in another window.")
-        time.sleep(3)
+        instance.signal_existing()          # the running Jarvis opens its settings window
+        if not gui:
+            print("Jarvis is already running in another window.")
+            time.sleep(3)
         return
     cfg = config.load()
     load_modules(cfg)
     brain = Brain(cfg, registry)
+    if gui:
+        return run_gui(cfg, brain)
     print(f"Jarvis console test. Main model: {cfg['model_main']}, backup: {cfg['model_fallback']}.")
     print("Type /help for commands.")
     if not secrets.looks_like_key(secrets.get_api_key() or ""):
