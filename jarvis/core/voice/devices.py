@@ -1,6 +1,8 @@
 """Audio device lists. Only real microphones are offered as inputs: anything that carries
 PC/game audio (Stereo Mix, loopback, virtual cables) is filtered out, so game sound and
 Discord voices can never reach the wake word.
+Exception: the user can unlock a named virtual input (e.g. a VB-Cable that carries only their
+own processed mic) - it is then listed and usable. Unlocked names live in cfg "allowed_virtual_mics".
 
 Windows lists each device once per audio system (MME, DirectSound, WASAPI, WDM-KS).
 We use WASAPI only: full names, and Windows converts the sample rate for us.
@@ -41,15 +43,19 @@ def refresh():
             log.exception("audio device refresh failed")
 
 
-def _list(kind: str) -> list[dict]:
+def _list(kind: str, allowed=(), virtual_only=False) -> list[dict]:
     api_i, api = _wasapi_index()
     out, seen = [], set()
     chan = "max_input_channels" if kind == "input" else "max_output_channels"
     for d in sd.query_devices():
         if d[chan] < 1 or (api_i is not None and d["hostapi"] != api_i):
             continue
-        if kind == "input" and not is_real_mic(d["name"]):
-            continue
+        if kind == "input":
+            real = is_real_mic(d["name"])
+            if virtual_only and real:
+                continue
+            if not virtual_only and not real and d["name"] not in allowed:
+                continue
         if d["name"] in seen:
             continue
         seen.add(d["name"])
@@ -58,17 +64,23 @@ def _list(kind: str) -> list[dict]:
     return out
 
 
-def list_inputs() -> list[dict]:
-    return _list("input")
+def list_inputs(allowed=()) -> list[dict]:
+    """Real microphones, plus any virtual inputs the user unlocked by name."""
+    return _list("input", tuple(allowed or ()))
+
+
+def list_virtual_inputs() -> list[dict]:
+    """Inputs hidden because they may carry PC audio (Stereo Mix, virtual cables...)."""
+    return _list("input", virtual_only=True)
 
 
 def list_outputs() -> list[dict]:
     return _list("output")
 
 
-def resolve(kind: str, wanted: str):
+def resolve(kind: str, wanted: str, allowed=()):
     """Index of the device named `wanted` ("" = Windows default). None if it isn't connected."""
-    devs = _list(kind)
+    devs = _list(kind, tuple(allowed or ()))
     if wanted:
         for d in devs:
             if d["name"] == wanted:

@@ -77,6 +77,17 @@ PC_MODULES = ("apps", "media", "system", "weather", "timers", "notes", "routines
               "games", "screen", "listen")
 
 
+
+def _device_lists(kind, cfg):
+    """(usable devices, locked virtual inputs). Outputs have no virtual list."""
+    from jarvis.core.voice import devices
+    if kind != "input":
+        return devices.list_outputs(), []
+    devs = devices.list_inputs(cfg.get("allowed_virtual_mics", ()))
+    names = {d["name"] for d in devs}
+    return devs, [d for d in devices.list_virtual_inputs() if d["name"] not in names]
+
+
 def load_modules(cfg):
     """Modules plug into the registry. If one fails or is missing, Jarvis still runs."""
     import importlib
@@ -166,18 +177,28 @@ def voice_command(cmd, arg, cfg, va):
     if cmd in ("/mics", "/speakers"):
         kind = "input" if cmd == "/mics" else "output"
         chosen = cfg["mic_device" if kind == "input" else "speaker_device"]
-        for i, d in enumerate(devices.list_inputs() if kind == "input" else devices.list_outputs(), 1):
+        devs, virtual = _device_lists(kind, cfg)
+        for i, d in enumerate(devs + virtual, 1):
             mark = "  <- selected" if d["name"] == chosen or (not chosen and d["default"]) else ""
-            print(f"  {i}. {d['name']}{' (Windows default)' if d['default'] else ''}{mark}")
-        print(f"Choose with {cmd[:-1]} NUMBER" + ("  (only real microphones are listed)" if kind == "input" else ""))
+            vmark = "  [virtual: only if it carries just your voice]" if d in virtual else ""
+            print(f"  {i}. {d['name']}{' (Windows default)' if d['default'] else ''}{vmark}{mark}")
+        print(f"Choose with {cmd[:-1]} NUMBER")
     elif cmd in ("/mic", "/speaker"):
         kind = "input" if cmd == "/mic" else "output"
-        devs = devices.list_inputs() if kind == "input" else devices.list_outputs()
+        devs, virtual = _device_lists(kind, cfg)
+        num, _, confirm = arg.partition(" ")
         try:
-            d = devs[int(arg) - 1]
+            d = (devs + virtual)[int(num) - 1]
         except (ValueError, IndexError):
             print(f"Type {cmd}s to see the list, then {cmd} NUMBER.")
             return
+        if d in virtual:
+            if confirm.strip().lower() != "yes":
+                print(f"{d['name']} is a virtual input. Use it only if it carries just your own voice "
+                      f"(game, music or Discord sound in it could wake Jarvis).\n"
+                      f"To use it anyway, type: /mic {num} yes")
+                return
+            cfg["allowed_virtual_mics"] = [*cfg.get("allowed_virtual_mics", []), d["name"]]
         cfg["mic_device" if kind == "input" else "speaker_device"] = d["name"]
         config.save(cfg)
         print(f"{'Microphone' if kind == 'input' else 'Speaker'} set to {d['name']}.")

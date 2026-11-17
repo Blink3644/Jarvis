@@ -137,6 +137,13 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
     for k in ("game_list", "never_screenshot"):
         if k in f:
             cfg[k] = f[k] if isinstance(f[k], list) else parse_list(f[k])
+    # picking a virtual input (shown only after ticking "show virtual inputs") unlocks it by name
+    virtual = f.get("virtual_inputs") or ()
+    if cfg.get("mic_device") in virtual:
+        allowed = list(cfg.get("allowed_virtual_mics") or [])
+        if cfg["mic_device"] not in allowed:
+            allowed.append(cfg["mic_device"])
+        cfg["allowed_virtual_mics"] = allowed
     return cfg, errors
 
 
@@ -374,14 +381,27 @@ class SettingsWindow:
         p = self._scroll(tab)
         try:
             from ..voice import devices
-            ins = [d["name"] for d in devices.list_inputs()]
+            ins = [d["name"] for d in devices.list_inputs(c.get("allowed_virtual_mics", ()))]
+            self.virtual_inputs = [d["name"] for d in devices.list_virtual_inputs() if d["name"] not in ins]
             outs = [d["name"] for d in devices.list_outputs()]
         except Exception:
             log.exception("could not list audio devices")
-            ins, outs = [], []
+            ins, outs, self.virtual_inputs = [], [], []
         self._label(p, "Microphone. Jarvis only listens to this microphone.", bold=True)
         v = self._var("mic_device", c["mic_device"] or DEFAULT_DEVICE)
-        ctk.CTkOptionMenu(p, variable=v, values=[DEFAULT_DEVICE, *ins]).pack(anchor="w", padx=8)
+        mic_menu = ctk.CTkOptionMenu(p, variable=v, values=[DEFAULT_DEVICE, *ins])
+        mic_menu.pack(anchor="w", padx=8)
+        if self.virtual_inputs:
+            show = ctk.BooleanVar(value=False)
+
+            def toggle():
+                extra = self.virtual_inputs if show.get() else []
+                mic_menu.configure(values=[DEFAULT_DEVICE, *ins, *extra])
+            ctk.CTkCheckBox(p, text="Show virtual inputs (advanced)", variable=show,
+                            command=toggle).pack(anchor="w", padx=8, pady=(4, 0))
+            self._label(p, "Only pick a virtual input (like VB-Cable) if it carries just your own voice. "
+                           "If it also carries game, music or Discord sound, Jarvis may wake itself up.",
+                        color="gray")
         self.meter = ctk.CTkProgressBar(p, width=300)
         self.meter.set(0)
         self.meter.pack(anchor="w", padx=8, pady=6)
@@ -644,6 +664,7 @@ class SettingsWindow:
         form["app_aliases"] = self.aliases.values()
         form["game_list"] = parse_list(self.games_box.get("1.0", "end"))
         form["never_screenshot"] = parse_list(self.never_box.get("1.0", "end"))
+        form["virtual_inputs"] = getattr(self, "virtual_inputs", [])
         return form
 
     def save(self):

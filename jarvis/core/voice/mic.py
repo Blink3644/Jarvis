@@ -27,12 +27,12 @@ class Mic:
 
     def open(self) -> bool:
         self.close()
-        idx = devices.resolve("input", self.cfg.get("mic_device", ""))
+        idx = devices.resolve("input", self.cfg.get("mic_device", ""), self.cfg.get("allowed_virtual_mics", ()))
         if idx is None and time.monotonic() - self.last_refresh > 10:
             # re-scan for a re-plugged mic (rarely: a re-scan briefly resets all audio streams)
             self.last_refresh = time.monotonic()
             devices.refresh()
-            idx = devices.resolve("input", self.cfg.get("mic_device", ""))
+            idx = devices.resolve("input", self.cfg.get("mic_device", ""), self.cfg.get("allowed_virtual_mics", ()))
         if idx is None:
             log.warning("microphone %r not found", self.cfg.get("mic_device") or "(default)")
             return False

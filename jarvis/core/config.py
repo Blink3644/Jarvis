@@ -24,6 +24,7 @@ DEFAULTS = {
     "rate_limit_retries": 2,
     # ---- voice (Stage A2) ----
     "mic_device": "",                 # name of the ONLY mic Jarvis listens to ("" = Windows default mic)
+    "allowed_virtual_mics": [],       # virtual inputs (e.g. VB-Cable) the user unlocked: must carry only their voice
     "speaker_device": "",             # "" = Windows default output
     "ptt_enabled": True,
     "ptt_key": "ctrl_r",              # pynput key name (ctrl_r, alt_r, f8 ...) or a single character

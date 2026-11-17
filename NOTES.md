@@ -14,7 +14,7 @@
 - VAD: webrtcvad mode 3, 20 ms frames; endpoint.py (pure, tested). Follow-up needs 300 ms clear speech.
 - TTS: edge-tts en-GB-RyanNeural (first call 1.4 s cold, ~0.6-0.8 s warm; warmed at startup) -> miniaudio decode -> sounddevice;
   pyttsx3 fallback (David) for 60 s after an edge failure.
-- Devices: WASAPI only, auto_convert; Stereo Mix / CABLE Output / loopback names filtered. **Every thread that opens a
+- Devices: WASAPI only, auto_convert; Stereo Mix / CABLE Output / loopback names filtered unless unlocked by name in cfg `allowed_virtual_mics` (user routes processed mic via VB-Cable; console `/mic N yes`, settings "Show virtual inputs"). **Every thread that opens a
   WASAPI stream must call devices.com_init() first** (else PaErrorCode -9999 WDM-KS error).
 - Mic lost -> wake paused, retry every 2 s (device re-scan max every 10 s); PTT then says the mic isn't connected
   (strict reading of "only the selected mic").

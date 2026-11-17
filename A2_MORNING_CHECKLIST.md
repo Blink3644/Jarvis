@@ -4,7 +4,7 @@ Start it: double-click **`console_test.bat`**. Wait about 10 seconds after it sa
 
 | # | Do / say | You should get |
 |---|---|---|
-| 1 | Type `/mics` | A list of your real microphones (no "Stereo Mix"). If the one marked default isn't your headset, type `/mic 2` (its number). |
+| 1 | Type `/mics` | A list of your microphones. Virtual inputs (like VB-Cable) are listed last, marked `[virtual]`. Pick yours with `/mic NUMBER` (for a virtual one: `/mic NUMBER yes`, only if it carries just your voice). |
 | 2 | Type `/meter`, then talk | A bar that moves when you speak. |
 | 3 | Type `/testwake`, then say "Hey Jarvis" 3 times | "best score" above the threshold (0.5). |
 | 4 | Say **"Hey Jarvis, what time is it?"** | A short beep, then a spoken answer in a British voice within about 3 seconds. |
