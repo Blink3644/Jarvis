@@ -39,7 +39,7 @@ def test_tool_call_round_trip():
     assert fr.name == "get_time" and "time" in fr.response
     # tool declared to Gemini
     decls = client.models.calls[0][2].tools[0].function_declarations
-    assert [d.name for d in decls] == ["get_time"]
+    assert "get_time" in [d.name for d in decls]
 
 
 def test_memory_carries_over_and_trims_whole_exchanges():

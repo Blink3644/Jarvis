@@ -96,9 +96,13 @@ class Brain:
                 on_notice(msg)
 
         tools_used: list[str] = []
-        exchange = [types.Content(role="user", parts=[types.Part(text=text)])]
+        self.registry.begin_turn(text)
         final = ""
         try:
+            first = [types.Part(text=text)]
+            for m in self.registry.attachments(text):     # e.g. auto-look screenshot
+                first.append(_media_part(m))
+            exchange = [types.Content(role="user", parts=first)]
             for _ in range(MAX_TOOL_ROUNDS):
                 parts = self._request(self.conv.contents(exchange), notice, on_text)
                 exchange.append(types.Content(role="model", parts=parts))
@@ -111,8 +115,10 @@ class Brain:
                     tools_used.append(fc.name)
                     log.info("tool call: %s", fc.name)
                     result = self.registry.call(fc.name, dict(fc.args or {}))
+                    media = result.pop("_media", None) or []
                     responses.append(types.Part(function_response=types.FunctionResponse(
                         id=fc.id, name=fc.name, response=result)))
+                    responses += [_media_part(m) for m in media]
                 exchange.append(types.Content(role="user", parts=responses))
             else:
                 final = "Sorry, I got stuck going back and forth with my tools. Could you rephrase that?"
@@ -124,7 +130,7 @@ class Brain:
                          ok=False, notices=notices, tools_used=tools_used)
         if not final:
             final = "Done." if tools_used else "Sorry, I didn't get an answer back. Could you try again?"
-        self.conv.commit(exchange, text, final)
+        self.conv.commit(_without_media(exchange), text, final)
         self.history.log_line("You", text)
         self.history.log_line("Jarvis", final)
         return Reply(final, notices=notices, tools_used=tools_used)
@@ -257,6 +263,26 @@ class Brain:
         if minute_limited:
             raise FriendlyError("I've hit my limit, try again in a minute.")
         raise FriendlyError("I've hit my limit for today. It resets at midnight Pacific time.")
+
+
+def _media_part(m) -> types.Part:
+    return types.Part.from_bytes(data=m.data, mime_type=m.mime)
+
+
+def _without_media(exchange: list[types.Content]) -> list[types.Content]:
+    """Screenshots and recordings are sent once, then replaced by a note so they don't
+    use up tokens (and quota) on every later question."""
+    out = []
+    for c in exchange:
+        parts = []
+        for p in c.parts or []:
+            if p.inline_data is not None:
+                kind = (p.inline_data.mime_type or "file").split("/")[0]
+                parts.append(types.Part(text=f"[{kind} shown earlier]"))
+            else:
+                parts.append(p)
+        out.append(types.Content(role=c.role, parts=parts))
+    return out
 
 
 _MESSAGES = {
