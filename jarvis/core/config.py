@@ -31,6 +31,7 @@ DEFAULTS = {
     "wake_model": "hey_jarvis",
     "wake_sensitivity": 0.5,          # 0.1 (strict) .. 0.9 (very sensitive)
     "stt_model": "base.en",           # faster-whisper model: tiny.en / base.en / small.en
+    "main_timeout_s": 10,             # give up on a stuck main model after this (min 10)
     "hint_words": [],                 # extra words to help speech recognition (names, jargon)
     "tts_voice": "en-GB-RyanNeural",
     "followup_seconds": 5,            # keep listening after a reply; 0 = off

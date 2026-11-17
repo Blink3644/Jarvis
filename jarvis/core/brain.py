@@ -173,9 +173,11 @@ class Brain:
             return False
         return not self.usage.exhausted(model)
 
-    def _config(self) -> types.GenerateContentConfig:
+    def _config(self, timeout_s: float | None = None) -> types.GenerateContentConfig:
         decls = [types.FunctionDeclaration(**d) for d in self.registry.declarations()]
         return types.GenerateContentConfig(
+            # Google's minimum deadline is 10 s
+            http_options=types.HttpOptions(timeout=int(max(10, timeout_s) * 1000)) if timeout_s else None,
             system_instruction=system_prompt(self.cfg, self.registry.extra_context(), self.memory),
             tools=[types.Tool(function_declarations=decls)] if decls else None,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
@@ -183,8 +185,11 @@ class Brain:
 
     def _stream(self, client, model, contents, on_text) -> list[types.Part]:
         parts: list[types.Part] = []
+        # An overloaded main model can take 20+ s just to fail; give up sooner when there's a backup.
+        quick = (model == self.cfg["model_main"] and self.cfg["model_fallback"] != model)
+        timeout = self.cfg.get("main_timeout_s", 10) if quick else None
         for chunk in client.models.generate_content_stream(
-                model=model, contents=contents, config=self._config()):
+                model=model, contents=contents, config=self._config(timeout)):
             for cand in (chunk.candidates or [])[:1]:
                 for p in (cand.content.parts if cand.content and cand.content.parts else []):
                     if p.text and not p.thought and on_text:
