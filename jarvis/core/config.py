@@ -22,10 +22,27 @@ DEFAULTS = {
     "max_turns": 20,                  # exchanges kept in memory
     "remember_count": 5,              # summaries kept in "remember" mode
     "rate_limit_retries": 2,
+    # ---- voice (Stage A2) ----
+    "mic_device": "",                 # name of the ONLY mic Jarvis listens to ("" = Windows default mic)
+    "speaker_device": "",             # "" = Windows default output
+    "ptt_enabled": True,
+    "ptt_key": "ctrl_r",              # pynput key name (ctrl_r, alt_r, f8 ...) or a single character
+    "wake_enabled": True,
+    "wake_model": "hey_jarvis",
+    "wake_sensitivity": 0.5,          # 0.1 (strict) .. 0.9 (very sensitive)
+    "stt_model": "base.en",           # faster-whisper model: tiny.en / base.en / small.en
+    "hint_words": [],                 # extra words to help speech recognition (names, jargon)
+    "tts_voice": "en-GB-RyanNeural",
+    "followup_seconds": 5,            # keep listening after a reply; 0 = off
+    "max_record_seconds": 15,
+    "end_silence_ms": 800,
+    "stop_word_enabled": True,        # say "stop" while Jarvis talks to interrupt
+    "listen_sound": True,
 }
 
 PERSONALITIES = ("butler", "casual", "direct")
 HISTORY_MODES = ("session", "log", "remember")
+REPLY_MODES = ("spoken", "text", "both")
 
 
 def _path():
