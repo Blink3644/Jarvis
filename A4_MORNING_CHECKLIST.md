@@ -9,7 +9,7 @@ Do the A2 and A3 checklists first (they use `console_test.bat`). Close that wind
 | 1 | Start `run_gui_test.bat` | A tray icon appears, and you hear "Good morning, sir." with a glowing ring panel on screen. |
 | 2 | Right-click the tray icon → **Open settings** | The settings window opens. Look through every tab. |
 | 3 | General tab: press **Test key** | "Key works." |
-| 4 | Voice tab: talk | The level bar moves. Press **Test wake word**, say "Hey Jarvis" | It shows the best score after 10 s. |
+| 4 | Voice tab: talk, then press **Test wake word** and say "Hey Jarvis" | The level bar moves while you talk; after 10 s it shows the best wake score. |
 | 5 | Say "Hey Jarvis, what time is it?" | The ring changes while listening / thinking / speaking, the answer shows in the panel, the panel fades after ~8 s. |
 | 6 | Say "Hey Jarvis, explain how a rainbow works in detail" | It speaks about 3 sentences, says "The rest is on screen", and the full answer stays in the panel. |
 | 7 | Change something (e.g. personality to "Casual friend", home city), press **Save**, close and reopen settings | Your change is still there. Ask a question: the tone changed. |
