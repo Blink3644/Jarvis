@@ -47,4 +47,4 @@ def test_enable_disable(monkeypatch):
 
 def test_default_command_quoted():
     cmd = autostart.default_command()
-    assert cmd.startswith('"') and cmd.endswith("-m jarvis")
+    assert cmd.startswith('"') and cmd.endswith('Jarvis.pyw"')

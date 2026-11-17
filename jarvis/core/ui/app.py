@@ -149,8 +149,10 @@ class App:
     def _sync_autostart(self):
         try:
             want = bool(self.cfg.get("start_with_windows"))
-            if want != autostart.is_enabled():
-                autostart.enable() if want else autostart.disable()
+            if want and autostart.current() != autostart.default_command():
+                autostart.enable()          # also repairs an old or moved command
+            elif not want and autostart.is_enabled():
+                autostart.disable()
         except Exception:
             log.exception("start-with-Windows setting failed")
 

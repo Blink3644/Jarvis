@@ -1,7 +1,5 @@
 """'Start with Windows' via the HKCU Run key. Touches only the value named Jarvis."""
 import logging
-import sys
-from pathlib import Path
 
 try:
     import winreg
@@ -14,11 +12,20 @@ VALUE = "Jarvis"
 
 
 def default_command():
-    exe = Path(sys.executable)
-    pyw = exe.with_name("pythonw.exe")
-    if pyw.exists():
-        exe = pyw
-    return f'"{exe}" -m jarvis'
+    # Same launcher as the Start Menu shortcut: tray mode, works from any working folder.
+    from jarvis.core.shortcuts import launch_command
+    return launch_command()
+
+
+def current():
+    """The command stored in the Run key, or None."""
+    if winreg is None:
+        return None
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ) as k:
+            return winreg.QueryValueEx(k, VALUE)[0]
+    except OSError:
+        return None
 
 
 def is_enabled():
