@@ -1,8 +1,8 @@
 ﻿# Jarvis — current state
 
-**Stage A1 confirmed by user (2026-11-17). Stages A2 and A3 built and self-tested overnight (2026-11-17); waiting for the user's tests (A2_/A3_MORNING_CHECKLIST.md).**
+**Stage A1 confirmed by user (2026-11-17). Stages A2, A3 and A4 (minus custom wake-word training) built and self-tested overnight (2026-11-17); waiting for the user's tests (A2_/A3_/A4_MORNING_CHECKLIST.md).**
 
-- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (117 pass).
+- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (147 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
   `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits` are placeholders (250/1000).
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
@@ -22,7 +22,7 @@
   hiss wake 0.33 (<0.5), no false follow-up. STT 0.3 s, backup Gemini first chunk 1.6 s, edge first chunk 0.6-1.5 s.
 - Main model 503 "high demand" can take 24 s to fail -> main gets a 10 s deadline (`main_timeout_s`, server min 10 s),
   then backup for 60 s. NOT verified: live mic, speakers, real latency (log `latency:` lines). See A2_MORNING_CHECKLIST.md.
-- Single instance: named mutex (focus-existing comes with the A4 UI). Settings are console /commands until A4.
+- Single instance: named mutex; a second launch sets event `Local\JarvisShowSettings` -> running Jarvis opens settings.
 
 ## Stage A3 (PC tools) — `jarvis/pc/`, each module has `register(reg, cfg)`, loaded by `__main__.load_modules`
 - apps.py: Start Menu .lnk/.url + shell:AppsFolder (Store apps) + Steam/Epic (libraries.py) + cfg app_aliases.
@@ -37,3 +37,12 @@
   listen.py (PyAudioWPatch loopback; only when the request asks to listen/hear/song; loopback gives no frames in silence).
 - Live with Gemini (backup model, startfile faked): 13 requests all correct incl. confirmations. Not verified: real
   open/close, volume set, media keys, spoken timer, in-game screenshot/auto-look, real audio, Epic.
+
+## Stage A4 (UI) — `jarvis/core/ui/`, run `python -m jarvis --gui` (`run_gui_test.bat`, pythonw)
+- app.py ties it together: overlay.py owns the only Tk thread; settings_window.py (customtkinter) is built on it via
+  `overlay.call(fn)`; tray.py (pystray) own thread; FrontEnd forwards voice status to panel + tray.
+- Settings hooks: test_key (models.get, no quota; keep the Client object alive or the SDK closes it), test_wake,
+  mic_level (va.tap), reopen_mic, apply (updates the shared cfg dict in place), clear_history, check_usage, tool_names.
+- Mute = `va.muted` (frames dropped, PTT ignored). Long answers in reply mode "both": speak `spoken_sentence_limit`
+  (3) sentences + "The rest is on screen." autostart.py = HKCU Run "Jarvis". greeting.py off/simple/brief.
+- NOT built: custom wake-word training. NOT verified: real look on screen, dragging the panel, game FPS, autostart reboot.
