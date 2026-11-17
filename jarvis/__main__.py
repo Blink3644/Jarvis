@@ -72,13 +72,37 @@ class ConsoleUI:
         self._print(f"\n[{msg}]")
 
 
-def load_modules():
+PC_MODULES = ("apps", "media", "system", "weather", "timers", "notes", "routines",
+              "games", "screen", "listen")
+
+
+def load_modules(cfg):
     """Modules plug into the registry. If one fails or is missing, Jarvis still runs."""
+    import importlib
     try:
         from jarvis.pc import basic_tools
         basic_tools.register(registry)
     except Exception:
-        log.exception("pc module failed to load")
+        log.exception("pc module basic_tools failed to load")
+    for name in PC_MODULES:
+        try:
+            importlib.import_module(f"jarvis.pc.{name}").register(registry, cfg)
+        except Exception:
+            log.exception("pc module %s failed to load", name)
+
+
+def wire_front_end(ui, va):
+    """Let tools talk to the user outside a normal reply (timer done, PC-audio banner)."""
+    def announce(text):
+        ui.notice(text)
+        if va:
+            va.speaker.say(text)
+
+    def ui_event(name, data):
+        if name == "pc_audio":
+            ui.notice("Listening to PC audio..." if data.get("on") else "Stopped listening to PC audio.")
+    registry.announce = announce
+    registry.ui_event = ui_event
 
 
 def ask_key():
@@ -231,7 +255,7 @@ def main():
         time.sleep(3)
         return
     cfg = config.load()
-    load_modules()
+    load_modules(cfg)
     brain = Brain(cfg, registry)
     print(f"Jarvis console test. Main model: {cfg['model_main']}, backup: {cfg['model_fallback']}.")
     print("Type /help for commands.")
@@ -245,6 +269,7 @@ def main():
         except Exception:
             log.exception("voice failed to start")
             print("Voice couldn't start (details in the log). You can still type.")
+    wire_front_end(ui, va)
     try:
         while True:
             try:
