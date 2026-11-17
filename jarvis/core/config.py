@@ -31,7 +31,15 @@ DEFAULTS = {
     "wake_model": "hey_jarvis",
     "wake_sensitivity": 0.5,          # 0.1 (strict) .. 0.9 (very sensitive)
     "stt_model": "base.en",           # faster-whisper model: tiny.en / base.en / small.en
-    "main_timeout_s": 10,             # give up on a stuck main model after this (min 10)
+    "main_timeout_s": 10,
+    "home_city": "",                  # for weather, e.g. "Leeds"
+    "app_aliases": {},                # spoken name -> app name or path, e.g. {"browser": "Google Chrome"}
+    "game_list": [],                  # extra exe names that count as games, e.g. ["eldenring.exe"]
+    "auto_look": "games",             # "ask" | "games" | "always": attach a screenshot to questions
+    "never_screenshot": ["1password", "bitwarden", "keepass", "lastpass", "dashlane",
+                         "bank", "paypal"],   # window title / exe words that are never captured
+    "listen_default_s": 15,
+    "listen_max_s": 120,             # give up on a stuck main model after this (min 10)
     "hint_words": [],                 # extra words to help speech recognition (names, jargon)
     "tts_voice": "en-GB-RyanNeural",
     "followup_seconds": 5,            # keep listening after a reply; 0 = off

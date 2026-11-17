@@ -6,6 +6,7 @@ Gemini can only act through tools registered here.
 import itertools
 import logging
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -18,7 +19,7 @@ class Tool:
     description: str
     handler: Callable[..., Any]
     parameters: dict = field(default_factory=lambda: {"type": "object", "properties": {}})
-    destructive: bool = False   # needs the user's yes before it runs
+    destructive: bool | Callable[[dict], bool] = False   # needs the user's yes (or a test on the args)
     module: str = "core"
     confirm_text: Callable[[dict], str] | None = None   # e.g. "close Chrome"
     visual: bool = True         # False = obviously not about the screen (skip auto-look)
@@ -48,7 +49,11 @@ class Registry:
         self.context_providers: list[Callable[[], str]] = []
         self.hint_words: set[str] = set()
         self.attachment_providers: list[Callable[[str], list[Media]]] = []
+        # set by the front end: speak + show text later (timers); UI events (e.g. "pc_audio", {"on": True})
         self.announce: Callable[[str], None] = lambda text: log.info("announce: %s", text)
+        self.ui_event: Callable[[str, dict], None] = lambda name, data: log.debug("ui event %s %s", name, data)
+        # set when the user interrupts (says "stop" / presses push-to-talk); long tools should check it
+        self.cancel = threading.Event()
         self.last_user_text = ""
         self.turn = 0
         self.pending: dict[str, tuple[str, dict, int]] = {}
@@ -68,6 +73,7 @@ class Registry:
         """Called by the brain at the start of every user request."""
         self.turn += 1
         self.last_user_text = user_text or ""
+        self.cancel.clear()
         for k, (_, _, t) in list(self.pending.items()):
             if self.turn - t > 2:               # a confirmation question expires after 2 turns
                 del self.pending[k]
@@ -137,7 +143,12 @@ class Registry:
         if tool is None:
             return {"error": f"Unknown tool {name}"}
         args = dict(args or {})
-        if tool.destructive and not confirmed:
+        try:
+            needs_yes = tool.destructive(args) if callable(tool.destructive) else tool.destructive
+        except Exception:
+            log.exception("destructive check failed for %s", name)
+            needs_yes = True
+        if needs_yes and not confirmed:
             cid = str(next(self._ids))
             self.pending[cid] = (name, args, self.turn)
             return {"status": "needs_confirmation", "confirm_id": cid,

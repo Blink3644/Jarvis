@@ -318,6 +318,7 @@ class VoiceAssistant:
         if self.turn:
             self.turn["cancelled"] = True
             self.turn = None
+            self.registry.cancel.set()      # long tools (e.g. listening to PC audio) stop early
         self.speaker.interrupt()
 
     def _say_now(self, text):

@@ -55,7 +55,8 @@ class SentenceSplitter:
 
 
 STOP_WORDS = {"stop", "stop it", "stop talking", "be quiet", "quiet", "shut up", "shush",
-              "that's enough", "thats enough", "enough", "cancel", "never mind", "nevermind"}
+              "that's enough", "thats enough", "enough", "cancel", "never mind", "nevermind",
+              "stop listening", "stop recording", "that's enough listening"}
 
 
 def is_stop_command(text: str) -> bool:
