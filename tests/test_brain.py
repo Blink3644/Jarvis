@@ -104,7 +104,21 @@ def test_friendly_errors():
     nf = make([(MAIN, api_error(404, "NOT_FOUND", "models/x is not found"))])[0].ask("hi")
     assert "doesn't recognise the model" in nf.text
     srv = api_error(503, "UNAVAILABLE", "overloaded")
-    assert "servers are having trouble" in make([(MAIN, srv), (MAIN, srv)])[0].ask("hi").text
+    assert "servers are having trouble" in make([(MAIN, srv), (MAIN, srv), (BACKUP, srv), (BACKUP, srv)])[0].ask("hi").text
+
+
+def test_busy_main_falls_back_to_backup():
+    srv = api_error(503, "UNAVAILABLE", "This model is currently experiencing high demand.")
+    b, _ = make([(MAIN, srv), (BACKUP, text_chunks("hi from backup")), (BACKUP, text_chunks("again"))])
+    r = b.ask("hi")
+    assert r.ok and r.text == "hi from backup" and BACKUP_NOTICE in r.notices
+    assert b.ask("next").text == "again"     # main skipped for a minute
+
+
+def test_read_timeout_counts_as_server_trouble():
+    class ReadTimeout(Exception):
+        pass
+    assert classify(ReadTimeout()) == "server"
 
 
 def test_failed_turn_is_not_remembered():

@@ -53,6 +53,8 @@ def classify(e: Exception) -> str:
             return "server"
         return "other"
     name = type(e).__name__.lower()
+    if name in ("readtimeout", "writetimeout", "remoteprotocolerror"):
+        return "server"      # connected, but Google didn't answer in time
     if isinstance(e, (socket.gaierror, ConnectionError, TimeoutError)) or \
             "connect" in name or "timeout" in name or "network" in name:
         return "offline"
@@ -72,7 +74,9 @@ class Brain:
         self.usage = usage or Usage(cfg, clock=self.clock)
         self.history = history or HistoryStore(cfg)
         self.conv = Conversation(cfg.get("max_turns", 20))
-        self.client_factory = client_factory or (lambda key: genai.Client(api_key=key))
+        # 30 s timeout (milliseconds) so a stuck request can't freeze Jarvis
+        self.client_factory = client_factory or (lambda key: genai.Client(
+            api_key=key, http_options=types.HttpOptions(timeout=30_000)))
         self.sleep = sleep
         self.get_key = get_key
         self.blocked_until: dict[str, datetime.datetime] = {}
@@ -197,7 +201,7 @@ class Brain:
     def _request(self, contents, notice, on_text) -> list[types.Part]:
         client = self._get_client()
         main, backup = self.cfg["model_main"], self.cfg["model_fallback"]
-        minute_limited = False
+        minute_limited = server_down = False
         for model in (main, backup):
             if not self._available(model):
                 continue
@@ -221,10 +225,17 @@ class Brain:
                         minute_limited = True
                         self.blocked_until[model] = self.clock() + datetime.timedelta(seconds=60)
                         break
-                    if kind == "server" and server_retry > 0:
-                        server_retry -= 1
-                        self.sleep(2)
-                        continue
+                    if kind == "server":
+                        if "high demand" in str(e).lower():
+                            server_retry = 0    # overloaded: don't wait, go to backup
+                        if server_retry > 0:
+                            server_retry -= 1
+                            self.sleep(2)
+                            continue
+                        server_down = True      # busy/stuck: try the backup model
+                        if model == main:       # skip it for a minute so replies stay quick
+                            self.blocked_until[model] = self.clock() + datetime.timedelta(seconds=60)
+                        break
                     raise FriendlyError(_MESSAGES.get(kind, _MESSAGES["other"]).format(model=model)) from e
                 warn = self.usage.record(model)
                 if model == backup and model != main:
@@ -236,6 +247,8 @@ class Brain:
                 if warn:
                     notice(warn)
                 return parts
+        if server_down:
+            raise FriendlyError(_MESSAGES["server"])
         if minute_limited:
             raise FriendlyError("I've hit my limit, try again in a minute.")
         raise FriendlyError("I've hit my limit for today. It resets at midnight Pacific time.")
