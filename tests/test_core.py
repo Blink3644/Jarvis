@@ -98,6 +98,20 @@ def test_fallback_summary():
     assert fallback_summary([]) == ""
 
 
+def test_key_cleaning():
+    from jarvis.core import secrets
+    assert secrets.clean_key("\x16\x16") == ""
+    good = "AIza" + "x" * 35
+    assert secrets.clean_key(f" {good}\r\n") == good and secrets.looks_like_key(good)
+    assert not secrets.looks_like_key("\x16\x16") and not secrets.looks_like_key("wrong")
+
+
+def test_html_400_is_bad_key():
+    from jarvis.core.brain import classify
+    from .conftest import api_error
+    assert classify(api_error(400, "Bad Request", "<html><title>Error 400 (Bad Request)!!1</title></html>")) == "bad_key"
+
+
 def test_core_does_not_import_minecraft():
     import pathlib
     import re

@@ -43,7 +43,9 @@ def classify(e: Exception) -> str:
         low = blob.lower()
         if code == 429 or "resource_exhausted" in low:
             return "rate_day" if ("perday" in low or "per day" in low) else "rate_minute"
-        if "api_key_invalid" in low or "api key not valid" in low or code in (401, 403):
+        # an HTML 400 page comes from Google's front door when the key header is malformed
+        if ("api_key_invalid" in low or "api key not valid" in low or code in (401, 403)
+                or (code == 400 and "<html" in low)):
             return "bad_key"
         if code == 404:
             return "model_missing"

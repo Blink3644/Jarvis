@@ -28,10 +28,16 @@ def load_modules():
 
 
 def ask_key():
-    key = getpass.getpass("Paste your Gemini API key (it won't show) and press Enter: ").strip()
-    if key:
-        secrets.set_api_key(key)
-        print("Key saved in Windows Credential Manager.")
+    print("Copy your Gemini API key, then just press Enter here (I'll read it from the clipboard).")
+    print("Or paste it with a RIGHT-click (Ctrl+V doesn't work in this window). It won't show.")
+    typed = secrets.clean_key(getpass.getpass("Key: "))
+    key = typed if secrets.looks_like_key(typed) else secrets.clean_key(secrets.clipboard_text())
+    if not secrets.looks_like_key(key):
+        print("That doesn't look like a Gemini key (it should be a long code starting with AIza).")
+        print("Nothing saved. Copy the key again and type /key.")
+        return
+    secrets.set_api_key(key)
+    print(f"Key saved in Windows Credential Manager (ends in ...{key[-4:]}).")
 
 
 def main():
@@ -45,7 +51,7 @@ def main():
     brain = Brain(cfg, registry)
     print(f"Jarvis console test. Main model: {cfg['model_main']}, backup: {cfg['model_fallback']}.")
     print("Type /help for commands.")
-    if not secrets.get_api_key():
+    if not secrets.looks_like_key(secrets.get_api_key() or ""):
         ask_key()
     try:
         while True:
