@@ -100,3 +100,45 @@ def test_overwrite_keeps_skip_confirm_and_hand_edited_bad_step_fails_safely():
     assert r["failed"] == 1 and r["steps_run"] == 2
     reg.call("create_routine", {"name": "A", "steps": [GAMING[2]]}, confirmed=True)
     assert list(routines.load_routines()) == ["A"] and routines.load_routines()["A"]["skip_confirm"] is True
+
+
+def test_waits_for_opened_app_before_next_step():
+    LOG.clear()
+    reg = Registry()
+    reg.register(Tool("open_app", "o", lambda name: LOG.append(("open", name)) or {"opened": True, "app": "Spotify"},
+                      {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
+                      module="pc"))
+    reg.register(Tool("media_control", "m", lambda action: LOG.append(("media", action)) or {"ok": True},
+                      {"type": "object", "properties": {"action": {"type": "string"}}, "required": ["action"]},
+                      module="pc"))
+    slept = []
+    routines.register(reg, {}, wait_for_app=lambda n: LOG.append(("ready", n)), sleep=slept.append)
+    steps = [{"tool": "open_app", "args": {"name": "spotify"}}, {"tool": "wait", "args": {"seconds": 3}},
+             {"tool": "media_control", "args": {"action": "next"}}, {"tool": "open_app", "args": {"name": "x"}}]
+    reg.call("create_routine", {"name": "music", "steps": steps}, confirmed=True)
+    r = reg.call("run_routine", {"name": "music"})
+    assert r["failed"] == 0
+    # waits after the first open (more steps follow), not after the last one
+    assert LOG == [("open", "spotify"), ("ready", "Spotify"), ("media", "next"), ("open", "x")]
+    assert slept == [3.0]
+    assert reg.call("wait", {"seconds": 999})["waited_seconds"] == routines.MAX_WAIT_S
+
+
+def test_wait_until_ready(monkeypatch):
+    from jarvis.pc import apps
+
+    class P:
+        pid = 7
+    t = [0.0]
+    monkeypatch.setattr(apps, "find_app", lambda n, c: {"match": {"name": n}})
+    calls = []
+    monkeypatch.setattr(apps, "find_processes", lambda n, e: [P()] if t[0] >= 2 else [])
+    monkeypatch.setattr(apps, "_has_window", lambda pids: calls.append(pids) or True)
+
+    def sleep(s):
+        t[0] += s
+    assert apps.wait_until_ready({}, "Spotify", timeout=20, settle=2, clock=lambda: t[0], sleep=sleep)
+    assert calls == [{7}] and t[0] == 4.0
+    t[0] = 0.0
+    monkeypatch.setattr(apps, "find_processes", lambda n, e: [])
+    assert not apps.wait_until_ready({}, "Nope", timeout=3, clock=lambda: t[0], sleep=sleep)

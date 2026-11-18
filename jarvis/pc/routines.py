@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import threading
+import time
 
 from rapidfuzz import fuzz, process
 
@@ -110,7 +111,16 @@ def step_is_destructive(reg: Registry, step: dict) -> bool:
         return True
 
 
-def register(reg: Registry, cfg: dict) -> None:
+def _wait_for_app(cfg: dict, name: str) -> None:
+    from jarvis.pc import apps
+    apps.wait_until_ready(cfg, name)
+
+
+MAX_WAIT_S = 60
+
+
+def register(reg: Registry, cfg: dict, wait_for_app=None, sleep=time.sleep) -> None:
+    wait_for_app = wait_for_app or (lambda name: _wait_for_app(cfg, name))
     def list_routines() -> dict:
         r = load_routines()
         return {"routines": [{"name": k, "steps": [describe_step(reg, s) for s in v.get("steps", [])]}
@@ -139,12 +149,16 @@ def register(reg: Registry, cfg: dict) -> None:
         if not key:
             return {"error": f"I don't have a routine called '{name}'.", "known": list(r)}
         results, failed = [], 0
-        for s in r[key].get("steps", []):
+        steps = r[key].get("steps", [])
+        for i, s in enumerate(steps):
             tool = s.get("tool")
             if tool in FORBIDDEN_STEPS or tool not in reg.tools:
                 res = {"error": f"'{tool}' isn't available"}
             else:
                 res = reg.call(tool, s.get("args") or {}, confirmed=True)
+            # an app that was just opened needs to load before the next step can use it
+            if tool == "open_app" and res.get("opened") and i + 1 < len(steps):
+                wait_for_app(res.get("app") or (s.get("args") or {}).get("name", ""))
             ok = "error" not in res
             failed += not ok
             results.append({"step": describe_step(reg, s), "ok": ok,
@@ -193,7 +207,20 @@ def register(reg: Registry, cfg: dict) -> None:
         key = find_name(load_routines(), args.get("name", "")) or args.get("name", "")
         return f"delete the routine '{key}'"
 
+    def wait(seconds: float) -> dict:
+        try:
+            secs = max(0.0, min(float(seconds), MAX_WAIT_S))
+        except (TypeError, ValueError):
+            return {"error": "seconds must be a number"}
+        sleep(secs)
+        return {"waited_seconds": secs}
+
     name_schema = {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}
+    reg.register(Tool("wait", f"Pause for a number of seconds (max {MAX_WAIT_S}). Only for routine steps, "
+                      "e.g. to give something time to finish. Apps opened by a routine are already waited "
+                      "for automatically.", wait,
+                      {"type": "object", "properties": {"seconds": {"type": "number"}}, "required": ["seconds"]},
+                      module="pc", visual=False))
     reg.register(Tool("list_routines", "List saved routines and what each one does.", list_routines,
                       module="pc", visual=False))
     reg.register(Tool("run_routine", "Run a saved routine by name (e.g. 'gaming mode'). The name is "

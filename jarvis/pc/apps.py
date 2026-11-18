@@ -157,6 +157,39 @@ def open_app(cfg: dict, name: str) -> dict:
     return {"opened": True, "app": e["name"]}
 
 
+def _has_window(pids: set[int]) -> bool:
+    import win32gui
+    import win32process
+    found = [False]
+
+    def cb(hwnd, _):
+        if (win32gui.IsWindowVisible(hwnd) and win32gui.GetWindowText(hwnd).strip() and
+                win32process.GetWindowThreadProcessId(hwnd)[1] in pids):
+            found[0] = True
+    win32gui.EnumWindows(cb, None)
+    return found[0]
+
+
+def wait_until_ready(cfg: dict, name: str, timeout: float = 20.0, settle: float = 2.0,
+                     clock=time.monotonic, sleep=time.sleep) -> bool:
+    """After open_app: wait until the app shows a window (max `timeout` s), then `settle` s more
+    so it can take media keys etc. Used between routine steps. False if it never appeared."""
+    entry = find_app(name, cfg).get("match")
+    end = clock() + timeout
+    while clock() < end:
+        try:
+            pids = {p.pid for p in find_processes(name, entry)}
+            if pids and _has_window(pids):
+                sleep(settle)
+                return True
+        except Exception:
+            log.exception("waiting for %s failed", name)
+            break
+        sleep(0.5)
+    log.info("%s didn't show a window within %.0f s", name, timeout)
+    return False
+
+
 # ---------- close ----------
 def _is_protected(proc_name: str, exe: str, pid: int) -> bool:
     import psutil

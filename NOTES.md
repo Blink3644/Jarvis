@@ -31,7 +31,8 @@
 - media.py (pycaw `GetSpeakers().EndpointVolume`, CoInitialize per thread), system.py (shutdown/restart fixed args, sleep
   destructive), weather.py (Open-Meteo; httpx missing -> falls back to httpx2 from google-genai), timers.py (in memory,
   `register` returns the manager; announce via registry.announce), notes.py (notes.json, scopes, keyword context),
-  routines.py (create/run/delete confirmed; steps validated, no listen/look/routine tools inside routines).
+  routines.py (create/run/delete confirmed; steps validated, no listen/look/routine tools inside routines;
+  after an open_app step it waits for the app window (max 20 s) + 2 s before the next step; `wait` tool for explicit pauses).
 - core/game_profiles.py + games.py (foreground exe vs libraries / game_list / fullscreen heuristic, context line),
   screen.py (look_at_screen + auto-look "games"; mss.MSS; black-capture and never_screenshot checks),
   listen.py (PyAudioWPatch loopback; only when the request asks to listen/hear/song; loopback gives no frames in silence).
