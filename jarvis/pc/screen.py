@@ -18,6 +18,24 @@ _NON_VISUAL = re.compile(
     r"turn (it )?(up|down))\b", re.I)
 
 
+_LOOK = re.compile(
+    r"\b(look|looking|see|seeing|screen|screenshot|this|that|these|here|showing|shown|display(ed)?|"
+    r"window|read|beat|boss|setting|menu|what'?s that|what am i)\b", re.I)
+
+
+def user_asked_look(text: str) -> bool:
+    """Lenient check that the user's own words are about what's on screen."""
+    return bool(_LOOK.search(text or ""))
+
+
+def make_gate(cfg):
+    def gate(user_text: str) -> str | None:
+        if cfg.get("auto_look", "games") != "ask" or user_asked_look(user_text):
+            return None
+        return "I only look at your screen when you ask me to, e.g. 'look at my screen'."
+    return gate
+
+
 def is_non_visual(text: str) -> bool:
     return bool(_NON_VISUAL.search(text or ""))
 
@@ -131,11 +149,11 @@ def make_auto_look(cfg):
 
 def register(reg, cfg) -> None:
     reg.register(Tool(
-        name="look_at_screen",
+        name="look_at_screen", side_effect=False, brings_data=True,
         description=("Look at the user's focused window (or screen) and see what is on it. Use ONLY when "
                      "the user's question is about what is on their screen, e.g. 'what does this setting "
                      "do?' or 'how do I beat this boss?'. The screenshot is attached to the result."),
-        handler=make_look(cfg),
+        handler=make_look(cfg), gate=make_gate(cfg),
         parameters={"type": "object", "properties": {
             "question": {"type": "string", "description": "What the user wants to know about the screen"}}},
         module="pc", visual=True))

@@ -221,9 +221,9 @@ def register(reg: Registry, cfg: dict, wait_for_app=None, sleep=time.sleep) -> N
                       "e.g. to give something time to finish. Apps opened by a routine are already waited "
                       "for automatically.", wait,
                       {"type": "object", "properties": {"seconds": {"type": "number"}}, "required": ["seconds"]},
-                      module="pc", visual=False))
+                      side_effect=False, module="pc", visual=False))
     reg.register(Tool("list_routines", "List saved routines and what each one does.", list_routines,
-                      module="pc", visual=False))
+                      side_effect=False, module="pc", visual=False))
     def context() -> str:
         r = load_routines()
         if not r:

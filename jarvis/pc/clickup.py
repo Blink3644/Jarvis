@@ -242,7 +242,7 @@ def register(reg: Registry, cfg: dict) -> None:
     list_tasks, create_task, _ = make_tools(cfg)
     is_on = lambda: available(cfg)   # noqa: E731
     reg.register(Tool(
-        name="list_clickup_tasks",
+        name="list_clickup_tasks", side_effect=False, brings_data=True,
         description="List the user's open ClickUp tasks, soonest due first.",
         handler=list_tasks,
         parameters={"type": "object", "properties": {

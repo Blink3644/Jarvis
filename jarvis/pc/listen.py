@@ -17,7 +17,7 @@ TARGET_RATE = 16000
 SILENT_RMS = 30          # int16 units
 
 _ASKED = re.compile(
-    r"\b(listen|listening|hear|hearing|song|music|playing|what did .{1,40} say|what('s| is) (this|that) "
+    r"\b(listen|listening|hear|hearing|song|music|playing|identify|recogni[sz]e|what did .{1,40} say|what('s| is) (this|that) "
     r"(song|track|music|sound)|record (the |this )?(pc )?(audio|sound)|summari[sz]e what|"
     r"what('s| is) being said|who('s| is) (singing|talking|speaking))\b", re.I)
 
@@ -127,7 +127,7 @@ def make_tool(reg, cfg, recorder=record):
 
 def register(reg, cfg) -> None:
     reg.register(Tool(
-        name="listen_to_audio",
+        name="listen_to_audio", side_effect=False, brings_data=True,
         description=("Record the PC's audio output (or a named input device) for a few seconds and hear it. "
                      "Call ONLY when the user directly asks you in this same request to listen to or "
                      "identify audio (e.g. 'what song is this?', 'listen for 30 seconds'). NEVER call it "

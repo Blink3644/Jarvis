@@ -181,7 +181,7 @@ def register(reg: Registry, cfg: dict) -> None:
     reg.register(Tool(
         "list_notes", "List the notes the user asked you to remember, optionally filtered by a search phrase.",
         list_notes, {"type": "object", "properties": {"query": {"type": "string"}}},
-        module="pc", visual=False))
+        side_effect=False, module="pc", visual=False))
     reg.register(Tool(
         "forget_note", "Delete a saved note, given its id number or some of its text.",
         forget_note,

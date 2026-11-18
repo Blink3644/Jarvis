@@ -200,7 +200,7 @@ def register(reg: Registry, cfg: dict, clock=time.time, use_thread: bool = True)
                           "label": {"type": "string"}}, "required": ["time"]},
                       module="pc", visual=False))
     reg.register(Tool("list_timers", "List running timers and alarms with time left.", list_timers,
-                      module="pc", visual=False))
+                      side_effect=False, module="pc", visual=False))
     reg.register(Tool("cancel_timer", "Cancel a timer or alarm by its label or id, or 'all'.", cancel_timer,
                       {"type": "object", "properties": {"which": {"type": "string",
                        "description": "label, id number, or 'all'"}}, "required": ["which"]},

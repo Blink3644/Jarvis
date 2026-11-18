@@ -92,7 +92,7 @@ def register(reg, cfg: dict) -> None:
     def T(**kw):
         reg.register(Tool(module="pc", visual=False, **kw))
 
-    T(name="get_volume", description="Get the current system volume (0-100) and whether it is muted.",
+    T(name="get_volume", side_effect=False, description="Get the current system volume (0-100) and whether it is muted.",
       handler=get_volume)
     T(name="set_volume", description="Set the system volume to a percentage from 0 to 100.",
       handler=lambda percent: set_volume(percent),

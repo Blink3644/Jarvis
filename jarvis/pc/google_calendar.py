@@ -266,7 +266,7 @@ def register(reg: Registry, cfg: dict) -> None:
     get_events, add_event, _ = make_tools(cfg)
     is_on = lambda: available(cfg)   # noqa: E731
     reg.register(Tool(
-        name="get_calendar_events",
+        name="get_calendar_events", side_effect=False, brings_data=True,
         description="List the user's Google Calendar events from today onwards (today = days 1).",
         handler=get_events,
         parameters={"type": "object", "properties": {

@@ -111,7 +111,7 @@ def make_get_weather(cfg: dict):
 
 def register(reg: Registry, cfg: dict) -> None:
     reg.register(Tool(
-        name="get_weather",
+        name="get_weather", side_effect=False,
         description="Get the current weather and a forecast of 1-7 days. Uses the user's home city "
                     "unless a city is given. Temperatures in Celsius, wind in km/h.",
         handler=make_get_weather(cfg),

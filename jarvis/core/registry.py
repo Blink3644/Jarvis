@@ -24,6 +24,13 @@ class Tool:
     confirm_text: Callable[[dict], str] | None = None   # e.g. "close Chrome"
     visual: bool = True         # False = obviously not about the screen (skip auto-look)
     available: Callable[[], bool] | None = None   # None = always; False hides it (e.g. not set up)
+    # Safety (see CLAUDE.md): side_effect=False only for read-only tools. brings_data=True for tools that
+    # bring outside text/images/sound into the chat (screen, PC audio, calendar, ClickUp); after one runs,
+    # every side-effect tool in that turn needs the user's yes, so data can't trigger actions on its own.
+    side_effect: bool = True
+    brings_data: bool = False
+    # gate(user_text) -> None if allowed, else a friendly error. Checked in code, not just the prompt.
+    gate: Callable[[str], str | None] | None = None
 
 
 @dataclass
@@ -58,6 +65,7 @@ class Registry:
         self.last_user_text = ""
         self.last_reply = ""        # Jarvis's previous answer (set by the brain), e.g. for "copy that"
         self.turn = 0
+        self.tainted = ""           # what outside data entered this turn ("" = none)
         self.pending: dict[str, tuple[str, dict, int]] = {}
         self._ids = itertools.count(1)
         self.register(Tool(
@@ -65,7 +73,7 @@ class Registry:
             description="Run an action that was waiting for the user's confirmation. Call this ONLY "
                         "right after the user clearly said yes to your confirmation question. "
                         "If they said no, don't call anything.",
-            handler=self._confirm,
+            handler=self._confirm, side_effect=False,
             parameters={"type": "object", "properties": {"confirm_id": {"type": "string"}},
                         "required": ["confirm_id"]},
         ))
@@ -75,6 +83,7 @@ class Registry:
         """Called by the brain at the start of every user request."""
         self.turn += 1
         self.last_user_text = user_text or ""
+        self.tainted = ""
         self.cancel.clear()
         for k, (_, _, t) in list(self.pending.items()):
             if self.turn - t > 2:               # a confirmation question expires after 2 turns
@@ -108,6 +117,8 @@ class Registry:
                 out += p(user_text) or []
             except Exception:
                 log.exception("attachment provider failed")
+        if out:
+            self.tainted = self.tainted or "screen"     # an auto-look screenshot is outside data too
         return out
 
     def register(self, tool: Tool) -> None:
@@ -161,6 +172,16 @@ class Registry:
         except Exception:
             log.exception("destructive check failed for %s", name)
             needs_yes = True
+        if tool.gate and not confirmed:
+            try:
+                why = tool.gate(self.last_user_text)
+            except Exception:
+                log.exception("gate check failed for %s", name)
+                why = "I can only do that when you ask for it directly."
+            if why:
+                return {"error": why}
+        if self.tainted and tool.side_effect and name != "confirm_action":
+            needs_yes = True    # this turn read outside data (screen/audio/calendar...): ask the user first
         if needs_yes and not confirmed:
             cid = str(next(self._ids))
             self.pending[cid] = (name, args, self.turn)
@@ -170,6 +191,8 @@ class Registry:
                                    f"confirm_action with confirm_id {cid}."}
         try:
             result = tool.handler(**args)
+            if tool.brings_data:
+                self.tainted = self.tainted or name
         except Exception as e:
             log.exception("tool %s failed", name)
             return {"error": f"{type(e).__name__}: {e}"}
