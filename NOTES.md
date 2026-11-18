@@ -70,3 +70,22 @@
   clips, otherwise trailing silence). Very quiet input reproduces the errors ("via git" -> "by a GIC" at 3% volume).
   "heard" log lines now include the peak level (e.g. "level -12 dB"); below about -30 dB means the VB-Cable chain is
   too quiet. Next: read those levels from the user's next session before changing any code.
+
+## Multiple AI providers (2026-11-17)
+- `core/providers.py`: adapters behind `generate(key, model, system, contents, tools) -> list[types.Part]`
+  and `list_models(key)`. History stays in google-genai `types.Content`; adapters convert it.
+  `OpenAIAdapter` = Chat Completions at any base URL (OpenAI, Groq, OpenRouter, Mistral, Ollama, custom);
+  `AnthropicAdapter` = Messages API (`anthropic-version: 2023-06-01`). Plain urllib, no new packages.
+  Non-Gemini replies are not streamed (whole reply at once), so first-word latency is higher there.
+- Config `providers` = ordered list; Gemini entry uses `model_main`/`model_fallback`, others have `models`.
+  Keys: keyring user `provider:<id>` (`secrets.get/set/delete_provider_key`). Usage/limits keyed `<id>/<model>`.
+- `Brain._request` walks slots in order: skips disabled, blocked, quota-full, missing/bad key (moves on),
+  and providers lacking image/audio input for this question (one-off notice, no "switch").
+  Notices: Gemini backup = old BACKUP_NOTICE; other provider = "Switching to X for a bit." once.
+  Gemini-only setups behave exactly as before (all old tests unchanged).
+- Settings: "AI providers" tab (add preset, key, Test key = lists models, models comma list, Up/Down,
+  on/off, Remove deletes key). Capabilities per preset: images on for OpenAI/Anthropic/OpenRouter,
+  audio only Gemini (flags `images`/`audio` in config if a model differs).
+- API formats taken from the providers' long-standing public docs; NOT verified live this session
+  (no keys, budget). First real test per provider = the user's checklist.
+- Not done: streaming for non-Gemini providers; Test key doesn't fill the models field automatically.

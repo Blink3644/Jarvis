@@ -65,3 +65,9 @@ def test_window_smoke(monkeypatch):
         assert config.load()["theme"] == "hud"
     finally:
         win.close()
+
+
+def test_move_item_for_provider_order():
+    assert sw.move_item(["a", "b", "c"], 2, -1) == ["a", "c", "b"]
+    assert sw.move_item(["a", "b"], 0, -1) == ["a", "b"]
+    assert sw.move_item(["a", "b"], 1, 1) == ["a", "b"]

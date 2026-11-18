@@ -80,5 +80,11 @@ class Usage:
 
     def summary(self) -> list[tuple[str, int, int | None]]:
         self._roll()
-        models = [self.cfg["model_main"], self.cfg["model_fallback"]]
+        models = []
+        for p in self.cfg.get("providers") or [{"kind": "gemini"}]:
+            if p.get("kind") == "gemini":
+                models += [self.cfg["model_main"], self.cfg["model_fallback"]]
+            elif p.get("enabled", True):
+                models += [f"{p['id']}/{m}" for m in p.get("models") or [] if m]
+        models = list(dict.fromkeys(models))
         return [(m, self.count(m), self.limit(m)) for m in models]

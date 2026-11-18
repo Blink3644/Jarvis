@@ -15,6 +15,10 @@ DEFAULTS = {
     "model_fallback": "gemini-3.5-flash-lite",
     "daily_limits": {"gemini-3.8-flash": 20, "gemini-3.5-flash-lite": 1000},  # main 20 = real free-tier 429 (2026-11-17); lite unverified
     "usage_warn_percent": 80,
+    # AI providers in priority order (Gemini uses model_main/model_fallback; others list their own
+    # models). Keys live in Windows Credential Manager, never here. Daily limits for other
+    # providers are keyed "<provider id>/<model>".
+    "providers": [{"id": "gemini", "kind": "gemini", "name": "Google Gemini", "enabled": True}],
     "personality": "butler",          # butler | casual | direct
     "user_title": "sir",
     "reply_mode": "both",             # spoken | text | both (used from Stage A2)

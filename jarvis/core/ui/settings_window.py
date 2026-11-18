@@ -18,7 +18,7 @@ import json
 import logging
 import os
 
-from .. import config, paths, secrets
+from .. import config, paths, providers, secrets
 
 log = logging.getLogger(__name__)
 
@@ -152,6 +152,15 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
             allowed.append(cfg["mic_device"])
         cfg["allowed_virtual_mics"] = allowed
     return cfg, errors
+
+
+def move_item(items: list, i: int, d: int) -> list:
+    """Copy of items with item i moved up (d=-1) or down (d=1); out-of-range moves do nothing."""
+    out = list(items)
+    j = i + d
+    if 0 <= i < len(out) and 0 <= j < len(out):
+        out[i], out[j] = out[j], out[i]
+    return out
 
 
 def mask_key(key: str | None) -> str:
@@ -319,9 +328,10 @@ class SettingsWindow:
         ctk = self.ctk
         self.tabs = ctk.CTkTabview(self.win, command=self._tab_changed)
         self.tabs.pack(fill="both", expand=True, padx=8, pady=(8, 0))
-        for name in ("General", "Voice", "PC", "Notes", "Routines", "Minecraft", "About"):
+        for name in ("General", "AI providers", "Voice", "PC", "Notes", "Routines", "Minecraft", "About"):
             self.tabs.add(name)
         self._general(self.tabs.tab("General"))
+        self._providers_tab(self.tabs.tab("AI providers"))
         self._voice(self.tabs.tab("Voice"))
         self._pc(self.tabs.tab("PC"))
         self._notes(self.tabs.tab("Notes"))
@@ -367,6 +377,124 @@ class SettingsWindow:
         self._menu(p, "startup_greeting", GREETING_LABELS, c["startup_greeting"], "Greeting at startup")
         self._menu(p, "theme", THEME_LABELS, c["theme"], "Look of the on-screen panel")
 
+    # ---------- AI providers tab ----------
+    def _providers_tab(self, tab):
+        ctk = self.ctk
+        self.prov_list = copy.deepcopy(self.cfg.get("providers") or [dict(providers.GEMINI_ENTRY)])
+        self.prov_keys: dict[str, str] = {}
+        self.prov_rows: list[dict] = []
+        self._label(tab, "Jarvis asks the top provider first. When it runs out or fails, it moves down the "
+                         "list, tells you once, and goes back up when the top one works again. Keys are kept "
+                         "in Windows Credential Manager. The Gemini key is on the General tab.", wrap=640)
+        add = ctk.CTkFrame(tab, fg_color="transparent")
+        add.pack(fill="x", padx=8, pady=4)
+        names = {p["name"]: k for k, p in providers.PRESETS.items()}
+        self.prov_add_var = ctk.StringVar(value=next(iter(names)))
+        ctk.CTkOptionMenu(add, variable=self.prov_add_var, values=list(names)).pack(side="left")
+        ctk.CTkButton(add, text="Add provider", width=110,
+                      command=lambda: self._prov_add(names[self.prov_add_var.get()])).pack(side="left", padx=6)
+        self.prov_frame = ctk.CTkScrollableFrame(tab)
+        self.prov_frame.pack(fill="both", expand=True, padx=4, pady=4)
+        self._prov_draw()
+
+    def _prov_sync(self):
+        """Copy what's typed in the rows back into prov_list / prov_keys."""
+        for row in self.prov_rows:
+            e = row["entry"]
+            e["enabled"] = bool(row["enabled"].get())
+            if "models" in row:
+                e["models"] = [m.strip() for m in row["models"].get().split(",") if m.strip()]
+            if "base_url" in row:
+                e["base_url"] = row["base_url"].get().strip()
+            if "key" in row:
+                k = secrets.clean_key(row["key"].get())
+                if k:
+                    self.prov_keys[e["id"]] = k
+
+    def _prov_draw(self):
+        ctk = self.ctk
+        for w in self.prov_frame.winfo_children():
+            w.destroy()
+        self.prov_rows = []
+        for i, e in enumerate(self.prov_list):
+            box = ctk.CTkFrame(self.prov_frame)
+            box.pack(fill="x", pady=4, padx=2)
+            top = ctk.CTkFrame(box, fg_color="transparent")
+            top.pack(fill="x", padx=6, pady=(4, 0))
+            row = {"entry": e, "enabled": ctk.BooleanVar(value=e.get("enabled", True))}
+            ctk.CTkCheckBox(top, text=f"{i + 1}. {e['name']}", variable=row["enabled"]).pack(side="left")
+            ctk.CTkButton(top, text="Up", width=44, command=lambda i=i: self._prov_move(i, -1)).pack(side="left", padx=2)
+            ctk.CTkButton(top, text="Down", width=54, command=lambda i=i: self._prov_move(i, 1)).pack(side="left", padx=2)
+            if e.get("kind") != "gemini":
+                ctk.CTkButton(top, text="Remove", width=70, command=lambda i=i: self._prov_remove(i)).pack(side="left", padx=2)
+                preset = providers.PRESETS.get(e.get("preset"), {})
+                caps = [c for c, on in (("pictures", e.get("images")), ("audio", e.get("audio"))) if on]
+                ctk.CTkLabel(top, text="can take: " + (", ".join(caps) or "text only")).pack(side="left", padx=8)
+                if not preset.get("no_key"):
+                    have = secrets.get_provider_key(e["id"])
+                    r = ctk.CTkFrame(box, fg_color="transparent")
+                    r.pack(fill="x", padx=6)
+                    row["key"] = ctk.CTkEntry(r, show="*", width=260, placeholder_text=(
+                        "Key saved. Paste a new one to change it" if have else "Paste your API key here"))
+                    row["key"].pack(side="left")
+                    ctk.CTkButton(r, text="Test key", width=80,
+                                  command=lambda row=row: self._prov_test(row)).pack(side="left", padx=6)
+                    if preset.get("key_url"):
+                        ctk.CTkLabel(r, text=f"Get a key: {preset['key_url']}").pack(side="left")
+                else:
+                    ctk.CTkButton(box, text="Test connection", width=120,
+                                  command=lambda row=row: self._prov_test(row)).pack(anchor="w", padx=6)
+                if e.get("preset") == "custom" or not e.get("base_url"):
+                    row["base_url"] = ctk.StringVar(value=e.get("base_url", ""))
+                    ctk.CTkLabel(box, text="Web address (base URL), e.g. https://example.com/v1").pack(anchor="w", padx=6)
+                    ctk.CTkEntry(box, textvariable=row["base_url"], width=360).pack(anchor="w", padx=6)
+                row["models"] = ctk.StringVar(value=", ".join(e.get("models") or []))
+                ctk.CTkLabel(box, text="Model(s), best first, separated by commas. Test key lists the names.").pack(anchor="w", padx=6)
+                ctk.CTkEntry(box, textvariable=row["models"], width=420).pack(anchor="w", padx=6, pady=(0, 4))
+                row["status"] = ctk.CTkLabel(box, text="", wraplength=600, justify="left")
+                row["status"].pack(anchor="w", padx=6)
+            else:
+                ctk.CTkLabel(top, text="models and key: General tab").pack(side="left", padx=8)
+            self.prov_rows.append(row)
+
+    def _prov_add(self, preset):
+        self._prov_sync()
+        self.prov_list.append(providers.new_entry(preset, {e["id"] for e in self.prov_list}))
+        self._prov_draw()
+
+    def _prov_move(self, i, d):
+        self._prov_sync()
+        self.prov_list = move_item(self.prov_list, i, d)
+        self._prov_draw()
+
+    def _prov_remove(self, i):
+        self._prov_sync()
+        self.prov_list.pop(i)
+        self._prov_draw()
+
+    def _prov_test(self, row):
+        import threading
+        self._prov_sync()
+        e = dict(row["entry"])
+        key = self.prov_keys.get(e["id"]) or secrets.get_provider_key(e["id"]) or ""
+        if not key and not providers.PRESETS.get(e.get("preset"), {}).get("no_key"):
+            return row["status"].configure(text="Paste a key first.")
+        row["status"].configure(text="Testing...")
+
+        def work():
+            try:
+                models = providers.make_adapter(e).list_models(key)
+                msg = f"Key works. {len(models)} models available: " + ", ".join(models[:40])
+            except providers.ProviderError as ex:
+                msg = "Key problem: " + ("the key was refused." if ex.code in (401, 403) else str(ex)[:200])
+            except Exception as ex:
+                msg = f"Couldn't reach {e['name']}: {str(ex)[:150]}"
+            try:
+                self.win.after(0, lambda: row["status"].configure(text=msg))
+            except Exception:
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
     def _fill_usage(self):
         ctk = self.ctk
         for w in self.usage_frame.winfo_children():
@@ -374,7 +502,7 @@ class SettingsWindow:
         used = {m: u for m, u, _ in (self.h.call("check_usage", default=None) or [])}
         self.limit_vars = {}
         limits = self.cfg.get("daily_limits", {})
-        for model in dict.fromkeys([self.cfg["model_main"], self.cfg["model_fallback"], *limits]):
+        for model in dict.fromkeys([self.cfg["model_main"], self.cfg["model_fallback"], *used, *limits]):
             u = used.get(model)
             r = ctk.CTkFrame(self.usage_frame, fg_color="transparent")
             r.pack(fill="x", pady=1)
@@ -764,6 +892,22 @@ class SettingsWindow:
             secrets.set_api_key(key)
             self.key_entry.delete(0, "end")
             self.key_status.configure(text=mask_key(key))
+        if hasattr(self, "prov_list"):
+            self._prov_sync()
+            for e in self.prov_list:
+                if e.get("kind") != "gemini" and e.get("enabled") and not e.get("models"):
+                    return self._say(f"Type at least one model name for {e['name']} (Test key lists them).")
+            kept = {e["id"] for e in self.prov_list}
+            for e in self.cfg.get("providers") or []:
+                if e["id"] not in kept and e.get("kind") != "gemini":
+                    secrets.delete_provider_key(e["id"])     # removed provider: forget its key
+            cfg["providers"] = copy.deepcopy(self.prov_list)
+            for pid, k in self.prov_keys.items():
+                secrets.set_provider_key(pid, k)
+            for row in self.prov_rows:
+                if "key" in row:
+                    row["key"].delete(0, "end")
+            self.prov_keys.clear()
         mic_changed = cfg["mic_device"] != self.cfg.get("mic_device")
         config.save(cfg)
         self.cfg = cfg

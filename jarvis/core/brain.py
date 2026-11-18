@@ -12,7 +12,7 @@ from typing import Callable
 from google import genai
 from google.genai import errors, types
 
-from . import secrets
+from . import providers, secrets
 from .history import Conversation, HistoryStore, fallback_summary
 from .personality import system_prompt
 from .registry import Registry
@@ -52,6 +52,17 @@ def classify(e: Exception) -> str:
         if code >= 500:
             return "server"
         return "other"
+    if isinstance(e, providers.ProviderError):
+        low = str(e).lower()
+        if e.code == 429:
+            return "rate_day" if ("per day" in low or "daily" in low) else "rate_minute"
+        if e.code in (401, 403):
+            return "bad_key"
+        if e.code == 404:
+            return "model_missing"
+        if e.code >= 500:
+            return "server"
+        return "other"
     name = type(e).__name__.lower()
     if name in ("readtimeout", "writetimeout", "remoteprotocolerror"):
         return "server"      # connected, but Google didn't answer in time
@@ -67,7 +78,9 @@ class Brain:
                  client_factory: Callable[[str], object] | None = None,
                  sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], datetime.datetime] | None = None,
-                 get_key: Callable[[], str | None] = secrets.get_api_key):
+                 get_key: Callable[[], str | None] = secrets.get_api_key,
+                 get_provider_key: Callable[[str], str | None] = secrets.get_provider_key,
+                 adapter_factory: Callable[[dict], object] = providers.make_adapter):
         self.cfg = cfg
         self.registry = registry
         self.clock = clock or (lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -79,6 +92,9 @@ class Brain:
             api_key=key, http_options=types.HttpOptions(timeout=30_000)))
         self.sleep = sleep
         self.get_key = get_key
+        self.get_provider_key = get_provider_key
+        self.adapter_factory = adapter_factory
+        self.active: str | None = None      # usage key of the fallback slot in use (None = top choice)
         self.blocked_until: dict[str, datetime.datetime] = {}
         self.on_backup = False
         self._client = None
@@ -190,11 +206,10 @@ class Brain:
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
-    def _stream(self, client, model, contents, on_text) -> list[types.Part]:
+    def _stream(self, client, model, contents, on_text, timeout=None) -> list[types.Part]:
         parts: list[types.Part] = []
-        # An overloaded main model can take 20+ s just to fail; give up sooner when there's a backup.
-        quick = (model == self.cfg["model_main"] and self.cfg["model_fallback"] != model)
-        timeout = self.cfg.get("main_timeout_s", 10) if quick else None
+        # An overloaded top choice can take 20+ s just to fail; the caller passes a short
+        # timeout when there's a backup to move on to.
         for chunk in client.models.generate_content_stream(
                 model=model, contents=contents, config=self._config(timeout)):
             for cand in (chunk.candidates or [])[:1]:
@@ -210,52 +225,118 @@ class Brain:
                         parts.append(p)
         return parts
 
-    def _request(self, contents, notice, on_text) -> list[types.Part]:
-        client = self._get_client()
+    def _slots(self) -> list[tuple[dict, str, str]]:
+        """(provider entry, model, usage key) in the user's priority order."""
         main, backup = self.cfg["model_main"], self.cfg["model_fallback"]
-        minute_limited = server_down = False
-        for model in (main, backup):
-            if not self._available(model):
+        out = []
+        for p in self.cfg.get("providers") or [providers.GEMINI_ENTRY]:
+            if not p.get("enabled", True):
                 continue
+            if p.get("kind") == "gemini":
+                out += [(p, main, main), (p, backup, backup)]
+            else:
+                out += [(p, m, f"{p['id']}/{m}") for m in p.get("models") or [] if m]
+        return out
+
+    def _call_slot(self, entry, model, contents, on_text, quick):
+        if entry.get("kind") == "gemini":
+            timeout = self.cfg.get("main_timeout_s", 10) if quick else None
+            return self._stream(self._get_client(), model, contents, on_text, timeout)
+        api_key = self.get_provider_key(entry["id"])
+        if not api_key and not providers.PRESETS.get(entry.get("preset"), {}).get("no_key"):
+            raise FriendlyError(f"I don't have an API key for {entry['name']} yet.")
+        tools = self.registry.declarations()
+        system = system_prompt(self.cfg, self.registry.extra_context(), self.memory)
+        timeout = self.cfg.get("main_timeout_s", 10) if quick else 30
+        parts = self.adapter_factory(entry).generate(api_key, model, system, contents, tools,
+                                                     timeout=max(10, timeout))
+        text = "".join(p.text for p in parts if p.text)
+        if text and on_text:
+            on_text(text)       # these APIs are called without streaming: the whole reply at once
+        return parts
+
+    def _request(self, contents, notice, on_text) -> list[types.Part]:
+        slots = self._slots()
+        main, backup = self.cfg["model_main"], self.cfg["model_fallback"]
+        need = providers.media_needs(contents)
+        minute_limited = server_down = False
+        fatal: str | None = None
+        dead: set[str] = set()          # providers whose key is missing/wrong this time
+        skipped_media: list[str] = []
+        first_key = next((k for e, _, k in slots if providers.supports(e, need)), None)
+        for i, (entry, model, ukey) in enumerate(slots):
+            pid, name = entry.get("id", "gemini"), entry.get("name", "Gemini")
+            if pid in dead or not self._available(ukey):
+                continue
+            if not providers.supports(entry, need):
+                if name not in skipped_media:
+                    skipped_media.append(name)
+                continue
+            more = any(k != ukey for _, _, k in slots[i + 1:])
+            others = any(e.get("id") != pid for e, _, _ in slots[i + 1:])
             retries = self.cfg.get("rate_limit_retries", 2)
             server_retry = 1
             attempt = 0
             while True:
                 try:
-                    parts = self._stream(client, model, contents, on_text)
+                    parts = self._call_slot(entry, model, contents, on_text,
+                                            quick=(ukey == first_key and more))
+                except FriendlyError as e:          # no key for this provider
+                    if not others:
+                        if fatal:
+                            raise FriendlyError(fatal) from e
+                        raise
+                    fatal = fatal or str(e)
+                    dead.add(pid)
+                    break
                 except Exception as e:
                     kind = classify(e)
-                    log.warning("Gemini error on %s: %s (%s)", model, kind, e)
+                    log.warning("%s error on %s: %s (%s)", name, model, kind, e)
                     if kind == "rate_day":
-                        self.blocked_until[model] = next_reset(self.clock())
+                        self.blocked_until[ukey] = next_reset(self.clock())
                         break
                     if kind == "rate_minute":
-                        if attempt < retries:
+                        if attempt < retries and not others:
                             self.sleep(2 * (2 ** attempt))
                             attempt += 1
                             continue
                         minute_limited = True
-                        self.blocked_until[model] = self.clock() + datetime.timedelta(seconds=60)
+                        self.blocked_until[ukey] = self.clock() + datetime.timedelta(seconds=60)
                         break
                     if kind == "server":
-                        if "high demand" in str(e).lower() or (model == main and backup != main):
-                            server_retry = 0    # main busy/stuck: don't retry it, the backup is quicker
+                        if "high demand" in str(e).lower() or more:
+                            server_retry = 0    # busy/stuck: don't retry, the next choice is quicker
                         if server_retry > 0:
                             server_retry -= 1
                             self.sleep(2)
                             continue
-                        server_down = True      # busy/stuck: try the backup model
-                        if model == main:       # skip it for a minute so replies stay quick
-                            self.blocked_until[model] = self.clock() + datetime.timedelta(seconds=60)
+                        server_down = True
+                        if ukey == first_key:   # skip it for a minute so replies stay quick
+                            self.blocked_until[ukey] = self.clock() + datetime.timedelta(seconds=60)
                         break
-                    raise FriendlyError(_MESSAGES.get(kind, _MESSAGES["other"]).format(model=model)) from e
-                warn = self.usage.record(model)
-                if model == backup and model != main:
-                    if not self.on_backup:
-                        notice(BACKUP_NOTICE)
-                    self.on_backup = True
-                elif model == main:
+                    msg = _message(kind, entry, model)
+                    if not others:
+                        raise FriendlyError(fatal or msg) from e
+                    fatal = fatal or msg
+                    if kind == "bad_key":
+                        dead.add(pid)
+                    break
+                warn = self.usage.record(ukey)
+                if skipped_media:
+                    what = "see pictures" if "image" in need else "listen to audio"
+                    notice(f"{' and '.join(skipped_media)} can't {what}, so {name} is answering this one.")
+                elif ukey == first_key:
                     self.on_backup = False
+                    self.active = None
+                elif self.active != ukey:
+                    gem_backup = entry.get("kind") == "gemini" and model == backup and backup != main
+                    same_provider = self.active is not None and self.active.split("/")[0] == pid
+                    if gem_backup and not self.on_backup:
+                        notice(BACKUP_NOTICE)
+                    elif not gem_backup and not same_provider:
+                        notice(f"Switching to {name} for a bit.")
+                    self.on_backup = True
+                    self.active = ukey
                 if warn:
                     notice(warn)
                 return parts
@@ -263,7 +344,22 @@ class Brain:
             raise FriendlyError(_MESSAGES["server"])
         if minute_limited:
             raise FriendlyError("I've hit my limit, try again in a minute.")
+        if fatal:
+            raise FriendlyError(fatal)
+        if skipped_media and not any(providers.supports(e, need) for e, _, _ in slots):
+            what = "pictures" if "image" in need else "audio"
+            raise FriendlyError(f"None of my AI providers can handle {what}. Turn on Gemini in settings.")
         raise FriendlyError("I've hit my limit for today. It resets at midnight Pacific time.")
+
+
+def _message(kind: str, entry: dict, model: str) -> str:
+    if entry.get("kind") == "gemini":
+        return _MESSAGES.get(kind, _MESSAGES["other"]).format(model=model)
+    name = entry.get("name", "that provider")
+    return {"bad_key": f"My {name} API key doesn't seem to work. Please check it in settings.",
+            "model_missing": f"{name} doesn't recognise the model name {model}. Please pick another in settings.",
+            "offline": _MESSAGES["offline"],
+            }.get(kind, f"Sorry, something went wrong talking to {name}. The details are in the log.")
 
 
 def _media_part(m) -> types.Part:

@@ -17,7 +17,7 @@ The release is a zip for friends, Windows only. The user is not a programmer, so
 |---|---|
 | OS | Windows 10/11 only |
 | Language | Python 3.11+ |
-| AI brain | Google Gemini via the `google-genai` SDK. Each user pastes in **their own** free API key. |
+| AI brain | Several providers in a user-set priority order (changed 2026-11-17 at the user's request): Google Gemini via `google-genai` (default, the only one with Search grounding and audio), plus OpenAI, Anthropic Claude and any OpenAI-compatible service (Groq, OpenRouter, Mistral, Ollama, custom URL). Each user pastes in **their own** keys (keyring). Jarvis falls back down the list on quota/errors and returns to the top when it recovers. |
 | Voice input | Both push-to-talk (global hotkey) and a "Hey Jarvis" wake word. Each can be turned on or off in settings. |
 | Replies | The user picks in settings: spoken, on-screen text, or both |
 | UI | System tray icon plus a settings window |

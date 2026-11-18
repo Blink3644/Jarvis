@@ -98,9 +98,11 @@ class App:
         if self.va:
             self._chain_speaking()
         self._greet()
-        from jarvis.core.secrets import get_api_key, looks_like_key
-        if not looks_like_key(get_api_key() or ""):
-            self.ui.notice("I need a Gemini API key. Opening settings.")
+        from jarvis.core.secrets import get_api_key, get_provider_key, looks_like_key
+        others = [p for p in self.cfg.get("providers") or [] if p.get("kind") != "gemini"
+                  and p.get("enabled", True) and (p.get("preset") == "ollama" or get_provider_key(p["id"]))]
+        if not looks_like_key(get_api_key() or "") and not others:
+            self.ui.notice("I need an AI provider key (for example Gemini). Opening settings.")
             self.open_settings()
         self.done.wait()
         self._shutdown()

@@ -43,3 +43,27 @@ def delete_api_key() -> None:
         keyring.delete_password(SERVICE, USER)
     except Exception:
         pass
+
+
+# ---- keys for other AI providers (one keyring entry per provider id) ----
+def get_provider_key(pid: str):
+    if pid == "gemini":
+        return get_api_key()
+    try:
+        return keyring.get_password(SERVICE, f"provider:{pid}")
+    except Exception:
+        return None
+
+
+def set_provider_key(pid: str, key: str) -> None:
+    if pid == "gemini":
+        set_api_key(key)
+    else:
+        keyring.set_password(SERVICE, f"provider:{pid}", key.strip())
+
+
+def delete_provider_key(pid: str) -> None:
+    try:
+        keyring.delete_password(SERVICE, "gemini_api_key" if pid == "gemini" else f"provider:{pid}")
+    except Exception:
+        pass
