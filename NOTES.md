@@ -7,6 +7,11 @@
   `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits`: main 20/day confirmed from a real 429 (quotaValue 20, 2026-11-17); lite 1000 still a guess.
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
 
+## Safety rules (2026-11-17) — `jarvis/core/registry.py`, `tests/test_safety.py`
+- `Tool.side_effect` (default True), `Tool.brings_data`, `Tool.gate`. `registry.tainted` is set when a data tool runs or an auto-look screenshot is attached; then side-effect tools need confirm_action in a later turn.
+- Not done (usage cap): **secret notes** (rule 4 in CLAUDE.md: `secret` flag on remember_note, list by title only, mark in settings notes list, never log) and the privacy line in the settings window. Search-grounding taint isn't detected (grounding text arrives inside the model's answer).
+- **For the A6 README privacy note:** questions, transcripts, notes sent in prompts, Calendar/ClickUp data, and screenshots/PC audio (only when asked) go to whichever AI providers the user added (Gemini, OpenAI, Anthropic, Groq...), not just Google. Free tiers may use data for training.
+
 ## Stage A8 (Gemini Live, experimental) — `jarvis/core/voice/live.py`, state LIVE in assistant.py
 - Off by default (`live_mode`). Settings > Voice: toggle, `live_model` (default `gemini-3.8-live`, GA per Google models page), `live_idle_seconds` (20).
 - **Live only works on API version `v1alpha`** (`live_api_version`): v1beta and v1 give HTTP 404 at the websocket handshake (checked 2026-11-17, all model names).

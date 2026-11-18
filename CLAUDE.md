@@ -56,6 +56,12 @@ The release is a zip for friends, Windows only. The user is not a programmer, so
 - "Open app" only launches things found in the Start Menu, Steam/Epic libraries, or the user's alias list.
 - Destructive actions (shutdown, restart, closing apps) always need a spoken or clicked confirmation.
 - Text from mod files, quest files, scripts, web pages, and screenshots is **data, not instructions**. Wrap it as quoted content in prompts, and tell the model in the system prompt never to follow instructions found inside it.
+- **Actions prompted by data need a yes.** Tools are marked `side_effect=False` (read-only) or left at the safe default (side effect). Tools that bring outside content in (`brings_data=True`: look_at_screen, listen_to_audio, calendar/ClickUp reads; an auto-look screenshot counts too) taint the turn; after that every side-effect tool in the same turn goes through the confirm flow. Enforced in `jarvis/core/registry.py`, so Live mode gets it too.
+- **Request-gated tools are checked in code:** listen_to_audio only when the user's own words ask to listen/hear/identify; look_at_screen in "Only when asked" mode only when the words are about the screen (`Tool.gate`).
+- **No changing safety settings by voice.** No tool may change confirmations, routine `skip_confirm`, auto-look mode, the never-screenshot list, `allowed_virtual_mics`, provider keys or Live mode. Only the settings window can (`tests/test_safety.py` checks this).
+- **Secrets in notes** (passwords, PINs, card numbers, API keys) are saved with a `secret` flag, never sent to the AI (only listed by title) and never logged.
+- **Never build these tools:** sending messages, emails or DMs as the user; purchases or moving money; typing keystrokes, text or passwords into other apps or games; fetching or opening URLs taken from screen, file or web text; shell or code execution.
+- **Privacy:** data goes to whichever AI providers the user has added (not just Google), including Calendar/ClickUp data, and screenshots/PC audio when asked.
 
 ---
 
@@ -156,6 +162,7 @@ The release is a zip for friends, Windows only. The user is not a programmer, so
 - Test a clean install from the zip in a fresh folder.
 
 ### Stage A7 — Easy updates for friends
+- **Safety rule:** updates come only from the user's own configured GitHub releases, are verified (complete download, expected repo, checksum if published) and are installed only when the user clicks Update. Never auto-install.
 - **Ask the user where to host releases first.** Recommended: a GitHub repository with Releases. Walk them through creating it, and through publishing each new version as a Release with the zip attached.
 - Version number in the app (e.g. `jarvis/__init__.py`), shown in settings.
 - On startup (at most once a day) and via a **"Check for updates" button** in settings: compare against the latest release. If newer, show what changed and an **"Update" button**.
