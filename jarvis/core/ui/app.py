@@ -105,17 +105,67 @@ class App:
         self.done.wait()
         self._shutdown()
 
+    STEP_TIMEOUT = 1.5          # seconds each shutdown step may take before we move on
+    WATCHDOG_S = 6.0            # after Quit, the process ends by this time no matter what
+
     def quit(self):
+        log.info("Quit requested")
+        if not self.done.is_set():
+            # If the main thread is stuck somewhere (e.g. still starting voice), still exit.
+            t = threading.Timer(self.WATCHDOG_S, self._force_exit, args=("watchdog",))
+            t.daemon = True
+            t.start()
         self.done.set()
 
+    def _step(self, name, fn, timeout=None):
+        """Run fn in a helper thread; if it hangs, log it and carry on."""
+        err = []
+
+        def run():
+            try:
+                fn()
+            except Exception as e:
+                err.append(e)
+                log.exception("shutdown step '%s' failed", name)
+        t = threading.Thread(target=run, name=f"shutdown-{name}", daemon=True)
+        t.start()
+        t.join(self.STEP_TIMEOUT if timeout is None else timeout)
+        if t.is_alive():
+            log.warning("shutdown step '%s' stuck; skipping it", name)
+            return False
+        return not err
+
     def _shutdown(self):
-        try:
-            if self.va:
-                self.va.stop()
-        finally:
-            self.brain.close()
-            self.tray.stop()
+        log.info("shutting down")
+        if self.va:
+            self._step("voice", self.va.stop, timeout=2.5)
+        self._step("brain", self.brain.close)
+        self._step("tray", self.tray.stop)
+
+        def overlay():
             self.overlay.stop()
+            if self.overlay.thread:
+                self.overlay.thread.join(self.STEP_TIMEOUT)
+                if self.overlay.thread.is_alive():
+                    raise TimeoutError("panel thread did not end")
+        self._step("panel", overlay, timeout=self.STEP_TIMEOUT + 0.5)
+        self._force_exit("normal")
+
+    def _force_exit(self, why):
+        """End the process now. Audio drivers, Tk on a side thread and native libraries can
+        hang Python's normal exit (atexit/thread joins), so skip it once our own cleanup ran."""
+        log.info("exiting (%s)", why)
+        alive = [t.name for t in threading.enumerate()
+                 if t is not threading.current_thread() and t.is_alive() and not t.daemon]
+        if alive:
+            log.info("threads still running at exit: %s", ", ".join(alive))
+        logging.shutdown()
+        self._exit(0)
+
+    @staticmethod
+    def _exit(code):
+        import os
+        os._exit(code)
 
     # ---------- wiring ----------
     def _chain_speaking(self):
