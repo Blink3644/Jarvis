@@ -133,7 +133,8 @@ def ask_key():
 def start_voice(cfg, brain, ui):
     """Load the voice parts (takes a few seconds the first time: models download)."""
     from jarvis.core.voice.assistant import VoiceAssistant
-    from jarvis.core.voice.engines import Transcriber, Vad, WakeWord
+    from jarvis.core.voice import wakewords
+    from jarvis.core.voice.engines import Transcriber, Vad
     from jarvis.core.voice.hotkey import PushToTalk
     from jarvis.core.voice.mic import Mic
     from jarvis.core.voice.speaker import SOUNDS, Speaker
@@ -146,7 +147,10 @@ def start_voice(cfg, brain, ui):
             ptt = PushToTalk(cfg.get("ptt_key", "ctrl_r"))
         except ValueError:
             print(f"Unknown push-to-talk key {cfg.get('ptt_key')!r}; push-to-talk is off.")
-    va = VoiceAssistant(cfg, brain, registry, mic=Mic(cfg), wake=WakeWord(cfg.get("wake_model", "hey_jarvis")),
+    wake, fell_back = wakewords.load(cfg.get("wake_model", wakewords.DEFAULT))
+    if fell_back:
+        print("Your custom wake word couldn't be loaded, so I'm using \"Hey Jarvis\" for now.")
+    va = VoiceAssistant(cfg, brain, registry, mic=Mic(cfg), wake=wake,
                         stt=Transcriber(cfg.get("stt_model", "base.en")), speaker=Speaker(cfg),
                         vad=Vad(3), ui=ui, ptt=ptt, sounds=SOUNDS)
     va.start()
@@ -155,7 +159,7 @@ def start_voice(cfg, brain, ui):
     mic = va.mic.name or "(none found)"
     ways = []
     if cfg.get("wake_enabled", True):
-        ways.append('say "Hey Jarvis"')
+        ways.append(f'say "{wakewords.nice_name(wakewords.DEFAULT if fell_back else cfg.get("wake_model") or wakewords.DEFAULT)}"')
     if ptt:
         ways.append(f"hold {cfg.get('ptt_key', 'ctrl_r').replace('_r', ' (right)').replace('ctrl', 'Ctrl')}")
     print(f"Voice ready. Microphone: {mic}. To talk: {' or '.join(ways) or 'voice input is off'}.")

@@ -1,8 +1,8 @@
-﻿# Jarvis — current state
+# Jarvis — current state
 
-**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17) except custom wake-word training, which is NOT built yet (next job, then Stage A5).**
+**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Next: Stage A5.**
 
-- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (147 pass).
+- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (166 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
   `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits`: main 20/day confirmed from a real 429 (quotaValue 20, 2026-11-17); lite 1000 still a guess.
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
@@ -47,4 +47,10 @@
   mic_level (va.tap), reopen_mic, apply (updates the shared cfg dict in place), clear_history, check_usage, tool_names.
 - Mute = `va.muted` (frames dropped, PTT ignored). Long answers in reply mode "both": speak `spoken_sentence_limit`
   (3) sentences + "The rest is on screen." autostart.py = HKCU Run "Jarvis". greeting.py off/simple/brief.
-- NOT built: custom wake-word training. NOT verified: real look on screen, dragging the panel, game FPS, autostart reboot.
+- Custom wake word: voice/wakewords.py. Training = openWakeWord's Colab notebook (free T4 GPU, <1 h, outputs
+  my_custom_model/<name>.onnx; full notebook is Linux-only). Settings > Voice: "Wake word" list + "Train a custom wake
+  word" guide (open page / import .onnx / remove). Import checks .onnx input shape [*,16,96] via onnxruntime, copies to
+  %APPDATA%/Jarvis/wakewords/. cfg wake_model = "hey_jarvis" or a file name there; wakewords.load() falls back to
+  hey_jarvis if missing/broken; Save hot-swaps the model (app._swap_wake). Smoke-tested with a copy of the built-in ONNX;
+  NOT verified: a real Colab-trained model.
+- NOT verified: real look on screen, dragging the panel, game FPS, autostart reboot.

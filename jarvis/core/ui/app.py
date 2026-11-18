@@ -182,6 +182,22 @@ class App:
         self.settings = SettingsWindow(self.overlay.root, self.cfg, self._hooks())
         self.settings.show()
 
+    def _swap_wake(self):
+        """Load the newly chosen wake word (a few seconds) and hand it to the voice loop."""
+        from jarvis.core.voice import wakewords
+        try:
+            wake, fell_back = wakewords.load(self.cfg.get("wake_model"))
+        except Exception:
+            log.exception("could not load the wake word")
+            return
+        self.va.wake = wake
+        self.va.wake_reset_pending = True
+        name = wakewords.nice_name(wakewords.DEFAULT if fell_back else self.cfg.get("wake_model") or "")
+        if fell_back:
+            self.va.ui.notice("That wake word couldn't be loaded, so I'm using \"Hey Jarvis\".")
+        else:
+            self.va.ui.notice(f'Wake word is now "{name}".')
+
     def _hooks(self):
         app = self
 
@@ -210,10 +226,13 @@ class App:
                     app.va.events.put("reopen_mic")
 
             def apply(self, cfg):
+                old_wake = app.cfg.get("wake_model")
                 app.cfg.clear()
                 app.cfg.update(cfg)          # brain, voice and tools share this dict
                 app.overlay.set_theme(cfg.get("theme", "hud"))
                 app._sync_autostart()
+                if app.va and cfg.get("wake_model") != old_wake:
+                    threading.Thread(target=app._swap_wake, daemon=True).start()
 
             def clear_history(self):
                 from jarvis.core.history import HistoryStore

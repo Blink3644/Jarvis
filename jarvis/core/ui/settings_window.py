@@ -108,6 +108,12 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
     for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows"):
         if k in f:
             cfg[k] = bool(f[k])
+    if "wake_model" in f:
+        wm = str(f["wake_model"] or "").strip() or "hey_jarvis"
+        if wm != "hey_jarvis" and (not wm.lower().endswith(".onnx") or "/" in wm or "\\" in wm):
+            errors.append("Unknown wake word choice.")
+        else:
+            cfg["wake_model"] = wm
     if "wake_sensitivity" in f:
         v = _num(f["wake_sensitivity"], "Wake word sensitivity", 0.1, 0.9, float, errors)
         if v is not None:
@@ -414,7 +420,8 @@ class SettingsWindow:
         self._label(p, "Speaker", bold=True)
         v = self._var("speaker_device", c["speaker_device"] or DEFAULT_DEVICE)
         ctk.CTkOptionMenu(p, variable=v, values=[DEFAULT_DEVICE, *outs]).pack(anchor="w", padx=8)
-        self._check(p, "wake_enabled", c["wake_enabled"], 'Wake word ("Hey Jarvis")')
+        self._check(p, "wake_enabled", c["wake_enabled"], "Wake word on")
+        self._wake_picker(p)
         self._label(p, "Wake word sensitivity (low = strict, high = picks up more)")
         v = self._var("wake_sensitivity", float(c["wake_sensitivity"]), "float")
         ctk.CTkSlider(p, from_=0.1, to=0.9, variable=v, width=300).pack(anchor="w", padx=8)
@@ -426,6 +433,79 @@ class SettingsWindow:
         self._label(p, "Voice (pick one, or type any edge-tts voice name)")
         v = self._var("tts_voice", c["tts_voice"])
         ctk.CTkComboBox(p, variable=v, values=VOICES, width=300).pack(anchor="w", padx=8)
+
+    def _wake_picker(self, p):
+        from ..voice import wakewords
+        ctk = self.ctk
+        self._label(p, "Wake word (click Save after changing it)")
+        self.wake_choices = wakewords.choices()
+        current = self.cfg.get("wake_model") or wakewords.DEFAULT
+        if current not in self.wake_choices:
+            current = wakewords.DEFAULT
+        self.wake_var = self._var("wake_model", self.wake_choices[current])
+        self.wake_menu = ctk.CTkOptionMenu(p, variable=self.wake_var,
+                                           values=list(self.wake_choices.values()), width=300)
+        self.wake_menu.pack(anchor="w", padx=8)
+        ctk.CTkButton(p, text="Train a custom wake word (advanced)...", width=260,
+                      command=self._train_guide).pack(anchor="w", padx=8, pady=(4, 0))
+
+    def _refresh_wake_menu(self, select=None):
+        from ..voice import wakewords
+        self.wake_choices = wakewords.choices()
+        self.wake_menu.configure(values=list(self.wake_choices.values()))
+        if select in self.wake_choices:
+            self.wake_var.set(self.wake_choices[select])
+        elif self.wake_var.get() not in self.wake_choices.values():
+            self.wake_var.set(self.wake_choices[wakewords.DEFAULT])
+
+    def _train_guide(self):
+        """A small window that walks through training on Google Colab and importing the result."""
+        from ..voice import wakewords
+        ctk = self.ctk
+        top = ctk.CTkToplevel(self.win)
+        top.title("Train a custom wake word")
+        top.geometry("620x560")
+        top.transient(self.win)
+        box = ctk.CTkScrollableFrame(top)
+        box.pack(fill="both", expand=True, padx=8, pady=8)
+        self._label(box, "Train your own wake word", bold=True, wrap=560)
+        for line in wakewords.TRAINING_STEPS:
+            self._label(box, line, wrap=560)
+        self._label(box, "Tip: this is optional. \"Hey Jarvis\" stays available and is used automatically "
+                         "if a trained model ever fails to load.", wrap=560, color="gray")
+        status = ctk.CTkLabel(box, text="", anchor="w", justify="left", wraplength=560)
+
+        def open_page():
+            import webbrowser
+            webbrowser.open(wakewords.COLAB_URL)
+
+        def do_import():
+            from tkinter import filedialog
+            path = filedialog.askopenfilename(
+                parent=top, title="Pick your trained wake word (.onnx)",
+                filetypes=[("Wake word model", "*.onnx"), ("All files", "*.*")],
+                initialdir=os.path.join(os.path.expanduser("~"), "Downloads"))
+            if not path:
+                return
+            name, msg = wakewords.import_model(path)
+            status.configure(text=msg)
+            if name:
+                self._refresh_wake_menu(select=name)
+
+        def do_remove():
+            key = label_to_key(self.wake_choices, self.wake_var.get())
+            if not key or key == wakewords.DEFAULT:
+                return status.configure(text="Pick a trained wake word in the list first (Hey Jarvis can't be removed).")
+            wakewords.remove_model(key)
+            self._refresh_wake_menu(select=wakewords.DEFAULT)
+            status.configure(text=f"Removed \"{wakewords.nice_name(key)}\". Click Save to switch back to Hey Jarvis.")
+
+        row = ctk.CTkFrame(box, fg_color="transparent")
+        row.pack(fill="x", pady=6)
+        ctk.CTkButton(row, text="Open the training page", command=open_page).pack(side="left", padx=4)
+        ctk.CTkButton(row, text="Import a trained model...", command=do_import).pack(side="left", padx=4)
+        ctk.CTkButton(row, text="Remove selected", command=do_remove, fg_color="gray40").pack(side="left", padx=4)
+        status.pack(fill="x", pady=4)
 
     def _pc(self, tab):
         ctk, c = self.ctk, self.cfg
@@ -618,7 +698,7 @@ class SettingsWindow:
         self._say(("Key works. " if ok else "Key problem: ") + str(msg))
 
     def _test_wake(self):
-        self.wake_label.configure(text='Say "Hey Jarvis" now (10 seconds)...')
+        self.wake_label.configure(text="Say your wake word now (10 seconds)...")
         self.h.call("test_wake")
 
     def wake_result(self, text):
@@ -651,7 +731,8 @@ class SettingsWindow:
     def collect_form(self) -> dict:
         labelled = {"personality": PERSONALITY_LABELS, "reply_mode": REPLY_LABELS,
                     "history_mode": HISTORY_LABELS, "startup_greeting": GREETING_LABELS,
-                    "theme": THEME_LABELS, "auto_look": AUTO_LOOK_LABELS}
+                    "theme": THEME_LABELS, "auto_look": AUTO_LOOK_LABELS,
+                    "wake_model": getattr(self, "wake_choices", {})}
         form = {}
         for k, v in self.vars.items():
             val = v.get()
