@@ -130,6 +130,10 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
         v = _num(f["wake_sensitivity"], "Wake word sensitivity", 0.1, 0.9, float, errors)
         if v is not None:
             cfg["wake_sensitivity"] = round(v, 2)
+    if "obs_port" in f:
+        v = _num(f["obs_port"], "OBS port", 1, 65535, int, errors)
+        if v is not None:
+            cfg["obs_port"] = v
     if "followup_seconds" in f:
         v = _num(f["followup_seconds"], "Follow-up listening seconds", 0, 30, float, errors)
         if v is not None:
@@ -859,6 +863,59 @@ class SettingsWindow:
         self.cu_menu = ctk.CTkOptionMenu(p, variable=self.cu_list_var, values=[cur], width=300)
         self.cu_menu.pack(anchor="w", padx=8)
         self._cu_refresh()
+
+        self._label(p, "OBS (\"Jarvis, clip that\")", bold=True)
+        self._label(p, "Saves the last stretch of gameplay as a video using OBS's Replay Buffer. In OBS: "
+                       "Settings > Output > Replay Buffer > tick 'Enable Replay Buffer'; then Tools > WebSocket "
+                       "Server Settings > tick 'Enable WebSocket server' and click 'Show Connect Info' for the "
+                       "port and password.", color="gray60", wrap=640)
+        self._entry(p, "obs_port", c.get("obs_port", 4455), "OBS WebSocket port", width=90)
+        self.obs_status = self._label(p, "")
+        row = ctk.CTkFrame(p, fg_color="transparent")
+        row.pack(fill="x", padx=8, pady=4)
+        self.obs_entry = ctk.CTkEntry(row, show="*", width=300,
+                                      placeholder_text="OBS WebSocket password (leave empty if none)")
+        self.obs_entry.pack(side="left")
+        ctk.CTkButton(row, text="Save password", width=110, command=self._obs_save).pack(side="left", padx=6)
+        ctk.CTkButton(row, text="Test OBS", width=90, command=self._obs_test).pack(side="left")
+        self._obs_refresh()
+
+    def _obs_refresh(self):
+        from jarvis.pc import obs_clip
+        self.obs_status.configure(text="Password saved." if obs_clip.get_password() else "No password saved.")
+
+    def _obs_save(self):
+        from jarvis.pc import obs_clip
+        pw = self.obs_entry.get().strip()
+        if pw:
+            obs_clip.set_password(pw)
+        else:
+            obs_clip.clear_password()
+        self.obs_entry.delete(0, "end")
+        self._obs_refresh()
+        self._say("OBS password saved." if pw else "OBS password removed.")
+
+    def _obs_test(self):
+        from jarvis.pc import obs_clip
+        try:
+            port = int(str(self.vars["obs_port"].get()).strip())
+        except ValueError:
+            return self._say("The OBS port must be a number (usually 4455).")
+        self._say("Checking OBS...")
+
+        def work():
+            try:
+                with obs_clip.ObsClient(port, obs_clip.get_password()) as obs:
+                    on = obs.request("GetReplayBufferStatus").get("outputActive")
+                msg = ("OBS is connected and the Replay Buffer is running. 'Clip that' is ready." if on else
+                       "OBS is connected, but the Replay Buffer is off. Click 'Start Replay Buffer' in OBS.")
+            except obs_clip.ObsError as e:
+                msg = str(e)
+            except Exception:
+                log.exception("OBS test failed")
+                msg = "Couldn't test OBS. Details are in the log."
+            self._later(lambda: self._say(msg))
+        threading.Thread(target=work, daemon=True).start()
 
     def _later(self, fn):
         try:

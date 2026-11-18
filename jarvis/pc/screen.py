@@ -15,7 +15,7 @@ _NON_VISUAL = re.compile(
     r"\b(volume|mute|unmute|timers?|alarms?|remind(er)?s?|notes?|remember|routines?|weather|"
     r"what('s| is) the (time|date)|what time|lock|shut ?down|restart|sleep|close|quit|"
     r"(open|launch|start)\s+\w+|(play|pause|resume|skip)\b|next (song|track)|previous (song|track)|"
-    r"turn (it )?(up|down))\b", re.I)
+    r"turn (it )?(up|down)|clip (that|it)|save (that|a) (clip|replay))\b", re.I)
 
 
 _LOOK = re.compile(

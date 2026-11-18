@@ -2,10 +2,17 @@
 
 **Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. A6/A7 skipped for now at the user's request.**
 
-- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (219 pass).
+- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (238 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
   `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits`: main 20/day confirmed from a real 429 (quotaValue 20, 2026-11-17); lite 1000 still a guess.
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
+
+## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, waiting for the user's test with real OBS
+- Tool `clip_that`: OBS Replay Buffer via obs-websocket v5 (OBS 28+, port `obs_port` 4455, password in keyring
+  `Jarvis/obs_password`). Protocol checked against obs-websocket protocol.md. No key presses (user chose OBS over
+  Game Bar/NVIDIA hotkeys, which would break the no-keystrokes rule). Buffer off -> Jarvis starts it and says so.
+  Settings > Integrations > OBS: port, password, Test OBS. "clip that" skips auto-look. Tested vs a fake local
+  server only; NOT verified with real OBS.
 
 ## Safety rules (2026-11-17) — `jarvis/core/registry.py`, `tests/test_safety.py`
 - `Tool.side_effect` (default True), `Tool.brings_data`, `Tool.gate`. `registry.tainted` is set when a data tool runs or an auto-look screenshot is attached; then side-effect tools need confirm_action in a later turn.
