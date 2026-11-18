@@ -1,6 +1,6 @@
 # Jarvis — current state
 
-**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. A6/A7 skipped for now at the user's request.**
+**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. Stage A6 (setup.bat, run.bat, make_zip.bat, README) built 2026-11-18; clean install tested (238 pass in fresh copy); needs a GitHub repo URL from the user to push. A7 not started.**
 
 - Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (238 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
