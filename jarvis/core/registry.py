@@ -77,6 +77,18 @@ class Registry:
             parameters={"type": "object", "properties": {"confirm_id": {"type": "string"}},
                         "required": ["confirm_id"]},
         ))
+        # The model decides from context that the user is finished; the voice loop then
+        # stops follow-up listening (and closes a Live session) once the sign-off is spoken.
+        self.conversation_over = False
+        self.register(Tool(
+            name="end_conversation",
+            description="Call this when the user is wrapping up and wants nothing more right now "
+                        "(e.g. 'thanks Jarvis', 'that's all', 'perfect, cheers', 'goodbye', 'never mind'). "
+                        "Jarvis then stops listening for follow-ups. Reply with a very short sign-off. "
+                        "If the same message also asks for something, do that first. Don't call it while "
+                        "you are waiting for an answer from the user (e.g. a confirmation).",
+            handler=self._end_conversation, side_effect=False, visual=False,
+        ))
 
     # ---------- turns & confirmations ----------
     def begin_turn(self, user_text: str) -> None:
@@ -84,6 +96,7 @@ class Registry:
         self.turn += 1
         self.last_user_text = user_text or ""
         self.tainted = ""
+        self.conversation_over = False
         self.cancel.clear()
         for k, (_, _, t) in list(self.pending.items()):
             if self.turn - t > 2:               # a confirmation question expires after 2 turns
@@ -100,6 +113,10 @@ class Registry:
             return {"error": "The user did not clearly say yes, so nothing was done."}
         del self.pending[str(confirm_id)]
         return self.call(name, args, confirmed=True)
+
+    def _end_conversation(self) -> dict:
+        self.conversation_over = True
+        return {"ok": True, "note": "Follow-up listening is off. Give a brief sign-off, nothing more."}
 
     def describe(self, name: str, args: dict) -> str:
         tool = self.tools[name]

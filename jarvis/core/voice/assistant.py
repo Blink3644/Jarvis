@@ -17,7 +17,9 @@ import numpy as np
 from jarvis.core.secrets import redact
 
 from .endpoint import DONE, SPEAKING, TIMEOUT, EndpointSettings, Endpointer
-from .text import SentenceSplitter, is_stop_command, strip_wake_words
+from jarvis.core.personality import sign_off
+
+from .text import SentenceSplitter, is_closing_remark, is_stop_command, strip_wake_words
 
 log = logging.getLogger(__name__)
 
@@ -81,6 +83,7 @@ class VoiceAssistant:
         self.live_source = ""
         self.live_frames: list[np.ndarray] = []   # audio kept until Live answers (for the fallback)
         self.live_blocked_until = 0.0
+        self.live_end_pending = False      # close Live once the sign-off finishes playing
         speaker.on_speaking = self._on_speaking
 
     # ---------- lifecycle ----------
@@ -192,7 +195,8 @@ class VoiceAssistant:
             self.wake_resume_at = end + SELF_GUARD_S
             self.wake.reset()
             follow = self.cfg.get("followup_seconds", 5)
-            if follow and turn["spoke"] and not turn["cancelled"] and self.state == BUSY:
+            if (follow and turn["spoke"] and not turn["cancelled"] and not turn.get("end")
+                    and self.state == BUSY):
                 self.followup_guard_until = end + SELF_GUARD_S
                 self._start_listen("followup")
             elif self.state == BUSY:
@@ -325,6 +329,10 @@ class VoiceAssistant:
         def on_turn_complete():
             if mine():
                 self.ui.reply_text("", final=True)
+                # "Thanks Jarvis" in Live mode: close the session once the sign-off has been spoken
+                if (getattr(self.registry, "conversation_over", False)
+                        or is_closing_remark(getattr(self.registry, "last_user_text", ""))):
+                    self.live_end_pending = True
 
         def on_interrupted():
             if mine():
@@ -356,6 +364,10 @@ class VoiceAssistant:
                 self.live_frames = self.live_frames[-keep:]
         else:
             self.live_frames = []
+        if self.live_end_pending and not self.speaker.busy and not self.speaking:
+            log.info("live: user wrapped up, closing the session")
+            self._end_live()
+            return
         idle = float(self.cfg.get("live_idle_seconds", 20))
         if s.idle_for() > idle and not self.speaker.busy and not self.speaking:
             log.info("live session idle for %.0fs: closing to save quota", idle)
@@ -363,6 +375,7 @@ class VoiceAssistant:
 
     def _end_live(self):
         s, self.live = self.live, None
+        self.live_end_pending = False
         if s is not None:
             s.close()
         self.live_frames = []
@@ -497,6 +510,18 @@ class VoiceAssistant:
         log.info("heard (%s, stt %.2fs, level %s): %r", source, t_stt - t_end, level_db(audio), redact(text))
         if turn["cancelled"]:
             return
+        if (source != "followup" or _meaningful(text)) and is_closing_remark(text) \
+                and self._can_close_locally():
+            # "Thanks Jarvis": the job is done. Sign off without asking the AI, and don't keep listening.
+            turn["end"] = True
+            self.ui.user_text(text)
+            msg = sign_off(self.cfg, text)
+            log.info("closing remark: signing off, no follow-up listening")
+            self.ui.reply_text(msg, final=True)
+            if self.cfg.get("reply_mode", "both") != "text":
+                self._speak(turn, msg)
+                self.speaker.wait_idle(lambda: turn["cancelled"])
+            return
         if not _meaningful(text) or is_stop_command(text):
             if source == "ptt" and not _meaningful(text):
                 self.ui.notice("I didn't catch that.")
@@ -542,6 +567,9 @@ class VoiceAssistant:
             reply = self.brain.ask(text, on_text=on_text, on_notice=on_notice)
         if turn["cancelled"]:
             return
+        if getattr(self.registry, "conversation_over", False):
+            turn["end"] = True             # the AI judged the user is done (end_conversation tool)
+            log.info("AI ended the conversation: no follow-up listening")
         if not streamed or not reply.ok:
             self.ui.reply_text(reply.text)
             if speak:
@@ -559,6 +587,13 @@ class VoiceAssistant:
             if self.speaker.first_audio_at and self.speaker.first_audio_at > t_end:
                 log.info("latency: speech end -> first spoken word %.2fs",
                          self.speaker.first_audio_at - t_end)
+
+    def _can_close_locally(self) -> bool:
+        """The quick 'thanks' shortcut only when Jarvis isn't waiting on an answer; otherwise the AI
+        reads the context ('yes thanks' to 'shall I close Chrome?' is a yes, not a goodbye)."""
+        if getattr(self.registry, "pending", None):
+            return False
+        return not (getattr(self.registry, "last_reply", "") or "").rstrip().endswith("?")
 
     def _speak(self, turn, text):
         if not turn["cancelled"]:

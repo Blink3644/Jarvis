@@ -68,6 +68,36 @@ def is_stop_command(text: str) -> bool:
     return t in STOP_WORDS
 
 
+# "Thanks Jarvis", "that's all", "goodbye": the user is done, so no follow-up listening.
+# Only a whole short remark counts; "thanks, now turn it up" is a new request.
+_CLOSING = re.compile(
+    r"^(?:(?:ok|okay|alright|right|great|perfect|cool|nice|brilliant|awesome|lovely|good|"
+    r"excellent|cheers|no|nope) )*"
+    r"(?:(?:thanks|thank you|thank you very much|thanks a lot|thanks so much|many thanks|ta|cheers|"
+    r"much appreciated|appreciate it|that's all|that'll be all|that will be all|that's it|"
+    r"that's everything|that's all i needed|that's all for now|that'll do|that will do|"
+    r"nothing else|i'm good|i'm done|all good|all done|we're done|we're good|"
+    r"goodbye|good bye|bye|bye bye|see you|see ya|later|good night|night|"
+    r"perfect|great|cool|awesome|brilliant|lovely|excellent)"
+    r"(?: (?:that's all|that's it|that's everything|for now|thanks|thank you|bye|goodbye))*)$")
+_CLOSING_TAIL = re.compile(r"( (jarvis|jervis|travis|sir|mate|buddy|man|then|again|so much|very much))+$")
+
+
+def is_closing_remark(text: str) -> bool:
+    """True when the whole utterance just wraps things up ('Thanks Jarvis', 'ok that's all')."""
+    t = strip_wake_words(text or "").lower().replace("’", "'")
+    t = re.sub(r"[^a-z' ]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    t = _CLOSING_TAIL.sub("", t).strip()
+    if not t or len(t.split()) > 8:
+        return False
+    # bare praise ("great", "perfect") is too ambiguous on its own: it needs a thanks/bye with it
+    if t in {"perfect", "great", "cool", "awesome", "brilliant", "lovely", "excellent", "good",
+             "ok", "okay", "right", "alright", "no", "nope", "nice", "later", "night"}:
+        return False
+    return bool(_CLOSING.match(t))
+
+
 def strip_wake_words(text: str) -> str:
     """'Hey Jarvis, what time is it?' -> 'what time is it?'"""
     return _WAKE_PREFIX.sub("", text.strip()).strip()
