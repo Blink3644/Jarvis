@@ -81,3 +81,18 @@ def test_build_cfg_live_mode():
     assert cfg["live_model"] == "gemini-3.8-live" and cfg["live_idle_seconds"] == 30
     _, errors = sw.build_cfg(dict(config.DEFAULTS), {"live_idle_seconds": "1"})
     assert errors
+
+
+def test_window_shows_found_update(monkeypatch):
+    from jarvis.core import updater
+    info = updater.UpdateInfo("9.9.9", "Better wake word.", "https://x", None, None, "https://p")
+    monkeypatch.setattr(updater, "why_cant_update", lambda folder=None: None)
+    try:
+        win = sw.SettingsWindow(None, dict(config.DEFAULTS), {"update_info": lambda: info}, hidden=True)
+    except Exception as e:  # no display / Tk problem
+        pytest.skip(f"Tk unavailable: {e}")
+    try:
+        assert "9.9.9 is available" in win.upd_label.cget("text")
+        assert win.upd_btn.cget("state") == "normal" and win.upd_btn.cget("text") == "Update to 9.9.9"
+    finally:
+        win.close()

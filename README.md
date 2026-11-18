@@ -57,6 +57,16 @@ Windows SmartScreen or your antivirus may warn about a `.bat` file from the inte
 
 ### Updating to a new version
 
+**The easy way (version 0.1.3 and newer):** Jarvis checks for a new version once a day when it starts, and tells you when there is one. To update:
+
+1. Right-click the Jarvis tray icon → **Open settings** → **About** tab.
+2. Click **Check for updates**. If there's a new version, you'll see what changed and an **Update to ...** button.
+3. Click it, then **Yes**. Jarvis downloads the update, checks it, closes, and a small window shows the progress (it can take a few minutes if new parts need installing). Jarvis then starts again by itself.
+
+Nothing is ever installed until you click Update. Your settings, notes and keys are kept. The old version is saved in a `_previous` folder, and if the new version won't start, the old one is put back automatically. A log of the update is in `%APPDATA%\Jarvis\logs\update.log`.
+
+**The manual way (older versions, or if the button doesn't work):**
+
 1. Download the new Jarvis zip and unzip it somewhere **other than** your Jarvis folder (Downloads is fine).
 2. Open the unzipped folder and double-click **update.bat**.
 3. It finds your Jarvis, shows the old and new version numbers, and asks **Y/N**. Type `Y` and press Enter.
@@ -137,5 +147,7 @@ Free AI keys allow only a certain number of questions per minute and per day.
 
 1. Raise `__version__` in `jarvis/__init__.py` and commit.
 2. Double-click **make_zip.bat**. It makes `dist\Jarvis-<version>.zip` from the last commit. Your notes and keys aren't in it.
-3. On GitHub: **Releases → Draft a new release**. Make a tag like `v0.2.0`, write what changed, attach the zip, and click **Publish release**.
-4. Friends who already have Jarvis use the same zip: they unzip it and double-click **update.bat** (see "Updating to a new version").
+3. On GitHub: **Releases → Draft a new release**. Make a tag that matches the new version exactly, with a `v` in front (version `0.2.0` → tag `v0.2.0`). Write what changed (friends see this text in settings), attach the zip, and click **Publish release**. Don't tick "Set as a pre-release" unless you want friends' Jarvis to ignore it.
+4. Friends' Jarvis finds the release by itself (once a day, or when they click **Check for updates**). Friends on 0.1.2 or older update once by hand with update.bat.
+
+Every release needs a higher version number than the last. If the tag says a different version than the files inside, Jarvis refuses to install it and says so, so don't forget step 1. Optional: Jarvis also checks a SHA-256 checksum when GitHub shows one for the zip (it does for new uploads) or when you attach a `Jarvis-<version>.zip.sha256` file.

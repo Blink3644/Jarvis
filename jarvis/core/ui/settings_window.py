@@ -12,6 +12,8 @@ without a screen. The widgets are below.
     clear_history() -> None
     check_usage() -> list[(model, used, limit)]
     tool_names() -> list[str]         (for the routine step editor)
+    update_info() -> UpdateInfo|None  (an update the startup check already found)
+    install_update(folder) -> None    (app starts update.ps1 on the verified download and quits)
 """
 import copy
 import json
@@ -1100,6 +1102,96 @@ class SettingsWindow:
         self.log_dir = str(paths.data_dir() / "logs")
         self._label(tab, f"Log files: {self.log_dir}")
         self.ctk.CTkButton(tab, text="Open logs folder", command=self._open_logs).pack(anchor="w", padx=8, pady=6)
+        self._label(tab, "Updates", bold=True)
+        self.upd_label = self._label(tab, "New versions come from the Jarvis page on GitHub. "
+                                          "Nothing is installed until you click Update.")
+        self.upd_check_btn = self.ctk.CTkButton(tab, text="Check for updates", width=150, command=self._upd_check)
+        self.upd_check_btn.pack(anchor="w", padx=8, pady=6)
+        self.upd_box = self.ctk.CTkFrame(tab, fg_color="transparent")
+        self.upd_box.pack(fill="both", expand=True)
+        self.upd_info = None
+        found = self.h.call("update_info")
+        if found:
+            self._upd_show(found)
+
+    # ---- updates
+    def _upd_check(self):
+        from jarvis.core import updater
+        self.upd_label.configure(text="Checking GitHub for a new version...")
+        self.upd_check_btn.configure(state="disabled")
+
+        def work():
+            try:
+                info = updater.check()
+                msg = None if info else f"You have the latest version ({updater.current_version()})."
+            except updater.UpdateError as e:
+                info, msg = None, str(e)
+            except Exception:
+                log.exception("update check failed")
+                info, msg = None, "Couldn't check for updates. Details are in the log."
+
+            def done():
+                self.upd_check_btn.configure(state="normal")
+                if info:
+                    self._upd_show(info)
+                else:
+                    self.upd_label.configure(text=msg)
+            self._later(done)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _upd_show(self, info):
+        from jarvis.core import updater
+        self.upd_info = info
+        for w in self.upd_box.winfo_children():
+            w.destroy()
+        self.upd_label.configure(text=f"Version {info.version} is available (you have {updater.current_version()}).")
+        self._label(self.upd_box, "What changed:")
+        box = self.ctk.CTkTextbox(self.upd_box, height=140, wrap="word")
+        box.pack(fill="x", padx=8, pady=4)
+        box.insert("1.0", (info.notes or "(no description)")[:4000])
+        box.configure(state="disabled")
+        why = updater.why_cant_update()
+        self.upd_btn = self.ctk.CTkButton(self.upd_box, text=f"Update to {info.version}", width=150,
+                                          command=self._upd_install, state="disabled" if why else "normal")
+        self.upd_btn.pack(anchor="w", padx=8, pady=6)
+        if why:
+            self._label(self.upd_box, why, color="orange")
+
+    def _upd_install(self):
+        from tkinter import messagebox
+        from jarvis.core import updater
+        info = self.upd_info
+        if not info or not messagebox.askyesno(
+                "Update Jarvis", f"Update to version {info.version}?\n\nJarvis will close, install the update "
+                "and start again (a small window shows the progress). Your settings, notes and keys are kept.",
+                parent=self.win):
+            return
+        self.upd_btn.configure(state="disabled")
+        self.upd_check_btn.configure(state="disabled")
+
+        def progress(n, total):
+            txt = f"Downloading... {n * 100 // total}%" if total else f"Downloading... {n // 1024} KB"
+            self._later(lambda: self.upd_label.configure(text=txt))
+
+        def work():
+            try:
+                folder = updater.download(info, updater.work_dir(), progress=progress)
+                msg = "Download checked. Closing Jarvis to install the update..."
+            except updater.UpdateError as e:
+                folder, msg = None, str(e)
+            except Exception:
+                log.exception("update download failed")
+                folder, msg = None, "The update failed. Details are in the log."
+
+            def done():
+                self.upd_label.configure(text=msg)
+                if folder:
+                    self.h.call("install_update", folder)
+                else:
+                    self.upd_btn.configure(state="normal")
+                    self.upd_check_btn.configure(state="normal")
+            self._later(done)
+        threading.Thread(target=work, daemon=True).start()
 
     # ---- actions
     def _say(self, text):

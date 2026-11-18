@@ -1,9 +1,25 @@
-# Jarvis updater (run through update.bat). Copies this folder's program files over an
-# existing Jarvis install. Never touches %APPDATA%\Jarvis (settings, notes, keys) or .venv.
+# Jarvis updater. Copies new program files over an existing Jarvis install.
+# Never touches %APPDATA%\Jarvis (settings, notes, keys) or .venv.
+#  - update.bat runs it from an unzipped new version (asks before changing anything).
+#  - Jarvis's "Update" button runs it with -Source <verified download> -Dest <install> -Auto -WaitPid <Jarvis>
+#    after the user clicked Update, so it doesn't ask again.
+param([string]$Source, [string]$Dest, [switch]$Auto, [int]$WaitPid = 0)
 $ErrorActionPreference = 'Stop'
-$src = $PSScriptRoot
+$src = if ($Source) { (Resolve-Path -LiteralPath $Source).Path } else { $PSScriptRoot }
+if ($Auto) {
+    $Host.UI.RawUI.WindowTitle = 'Updating Jarvis'
+    $logDir = Join-Path $env:APPDATA 'Jarvis\logs'
+    try { New-Item -ItemType Directory -Force $logDir | Out-Null
+          Start-Transcript -LiteralPath (Join-Path $logDir 'update.log') -Force | Out-Null } catch {}
+}
 
 function Say($t, $c = 'Gray') { Write-Host " $t" -ForegroundColor $c }
+function Stop-Auto($msg) {      # -Auto has nobody to answer questions: explain, wait, give up
+    Say $msg Red
+    Say 'Nothing was changed. This window closes in 30 seconds.'
+    Start-Sleep -Seconds 30
+    exit 1
+}
 function Test-Install($p) {
     $p -and (Test-Path -LiteralPath (Join-Path $p 'Jarvis.pyw')) -and
         (Test-Path -LiteralPath (Join-Path $p '.venv\Scripts\python.exe'))
@@ -23,9 +39,10 @@ function Copy-Tree($from, $to, [switch]$Mirror) {
 }
 
 # 1. Find the installed copy: the Start Menu shortcut points at it.
-$dest = $null
+$dest = $Dest
+if ($Auto -and -not (Test-Install $dest)) { Stop-Auto "Update failed: $dest isn't a set-up Jarvis folder." }
 $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Jarvis.lnk'
-if (Test-Path -LiteralPath $lnk) {
+if (-not $dest -and (Test-Path -LiteralPath $lnk)) {
     try { $dest = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).WorkingDirectory } catch {}
 }
 while (-not (Test-Install $dest)) {
@@ -46,8 +63,12 @@ $old, $new = (Get-Version $dest), (Get-Version $src)
 Say "Your Jarvis:  $dest  (version $old)"
 Say "Update to:    version $new" Cyan
 Say 'Your settings, notes and keys are kept.'
-$ans = Read-Host ' Update now? (Y/N)'
-if ($ans -notmatch '^[Yy]') { Say 'Nothing changed.'; exit 1 }
+if (-not $Auto) {
+    $ans = Read-Host ' Update now? (Y/N)'
+    if ($ans -notmatch '^[Yy]') { Say 'Nothing changed.'; exit 1 }
+} else {
+    Say 'Please leave this window open. It closes by itself when the update is done.' Cyan
+}
 
 # 2. Close Jarvis if it's running from that folder.
 #    run.bat starts ".venv\Scripts\pythonw.exe Jarvis.pyw" with relative paths, and the venv
@@ -65,6 +86,9 @@ function Get-JarvisProcs {
     $ids = @($mine | ForEach-Object { $_.ProcessId })
     @($mine) + @($all | Where-Object { $ids -contains $_.ParentProcessId -and $ids -notcontains $_.ProcessId })
 }
+if ($WaitPid) {     # Jarvis closes itself after starting us; give it a moment
+    try { Wait-Process -Id $WaitPid -Timeout 15 -ErrorAction Stop } catch {}
+}
 for ($try = 1; $try -le 3; $try++) {
     $procs = @(Get-JarvisProcs)
     if (-not $procs.Count) { break }
@@ -72,6 +96,7 @@ for ($try = 1; $try -le 3; $try++) {
     $procs | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force } catch {} }
     Start-Sleep -Seconds 2
 }
+if ($Auto -and @(Get-JarvisProcs).Count) { Stop-Auto "Jarvis didn't close, so I couldn't update it." }
 while (@(Get-JarvisProcs).Count) {
     Say "Jarvis is still running. Right-click its tray icon (bottom-right) and click Quit, then press Enter." Yellow
     Read-Host ' ' | Out-Null
@@ -101,11 +126,28 @@ try {
         Copy-Tree $prev $dest
         Say 'Old version restored.'
     }
+    if ($Auto) { Start-Process -FilePath (Join-Path $dest '.venv\Scripts\pythonw.exe') -ArgumentList "`"$pyw`"" -WorkingDirectory $dest; Start-Sleep -Seconds 30 }
     exit 1
 }
 
-# 4. Start the new version.
-Say "Updated to version $new." Green
-Start-Process -FilePath (Join-Path $dest '.venv\Scripts\pythonw.exe') -ArgumentList "`"$pyw`"" -WorkingDirectory $dest
-Say 'Jarvis is starting (tray icon, bottom-right). You can delete this update folder now.'
+# 4. Start the new version. If it quits straight away, put the old version back.
+function Restore-Previous {
+    Copy-Tree (Join-Path $prev 'jarvis') (Join-Path $dest 'jarvis') -Mirror
+    Copy-Tree $prev $dest
+}
+$pythonw = Join-Path $dest '.venv\Scripts\pythonw.exe'
+Say "Updated to version $new. Starting it..." Green
+$p = Start-Process -FilePath $pythonw -ArgumentList "`"$pyw`"" -WorkingDirectory $dest -PassThru
+Say 'Checking that it starts properly (20 seconds)...'
+if ($p.WaitForExit(20000)) {
+    Say "Version $new closed right after starting, so I'm putting version $old back." Yellow
+    Restore-Previous
+    Start-Process -FilePath $pythonw -ArgumentList "`"$pyw`"" -WorkingDirectory $dest
+    Say "Version $old is back. The error is in the log file %APPDATA%\Jarvis\logs\jarvis.log." Yellow
+    if ($Auto) { Start-Sleep -Seconds 30 } 
+    exit 1
+}
+Say 'Jarvis is running (tray icon, bottom-right).' Green
+if ($Auto) { Say 'This window closes in 5 seconds.'; Start-Sleep -Seconds 5 }
+else { Say 'You can delete this update folder now.' }
 exit 0

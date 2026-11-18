@@ -82,6 +82,7 @@ class App:
         self.tray = Tray(self.open_settings, self._mute, self.quit)
         self.ui = FrontEnd(self.overlay, self.tray)
         self._start_voice = start_voice
+        self.update_info = None
 
     # ---------- lifecycle ----------
     def run(self):
@@ -99,6 +100,7 @@ class App:
         if self.va:
             self._chain_speaking()
         self._greet()
+        threading.Thread(target=self._startup_update_check, name="update-check", daemon=True).start()
         from jarvis.core.secrets import get_api_key, get_provider_key, looks_like_key
         others = [p for p in self.cfg.get("providers") or [] if p.get("kind") != "gemini"
                   and p.get("enabled", True) and (p.get("preset") == "ollama" or get_provider_key(p["id"]))]
@@ -206,6 +208,32 @@ class App:
         if self.va and self.cfg.get("reply_mode", "both") != "text":
             self.va.speaker.say(text)
 
+    def _startup_update_check(self):
+        """At most once a day: look for a newer release and mention it. Never installs anything."""
+        from jarvis.core import updater
+        try:
+            if not updater.due_today() or updater.why_cant_update():
+                return
+            info = updater.check()
+        except Exception as e:
+            log.info("startup update check skipped: %s", e)
+            return
+        if info:
+            self.update_info = info
+            msg = f"Jarvis version {info.version} is available. Open settings, About tab, to update."
+            self.ui.notice(msg)
+            self.tray.warn(msg)
+
+    def install_update(self, folder):
+        from jarvis.core import updater
+        try:
+            updater.launch_installer(folder)
+        except Exception:
+            log.exception("could not start the updater")
+            self.ui.notice("I couldn't start the update. Details are in the log.")
+            return
+        self.quit()
+
     def _sync_autostart(self):
         try:
             want = bool(self.cfg.get("start_with_windows"))
@@ -300,6 +328,12 @@ class App:
 
             def check_usage(self):
                 return app.brain.usage.summary()
+
+            def update_info(self):
+                return app.update_info
+
+            def install_update(self, folder):
+                app.install_update(folder)
 
             def tool_names(self):
                 return [d["name"] for d in app.registry.declarations()]

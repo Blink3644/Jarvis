@@ -1,8 +1,8 @@
 # Jarvis — current state
 
-**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. Stage A6 (setup.bat, run.bat, make_zip.bat, README) built 2026-11-18; clean install tested (238 pass in fresh copy); pushed to https://github.com/Blink3644/Jarvis (public, `origin`, branch main) 2026-11-18. A7 not started.**
+**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. Stage A6 (setup.bat, run.bat, make_zip.bat, README) built 2026-11-18; clean install tested (238 pass in fresh copy); pushed to https://github.com/Blink3644/Jarvis (public, `origin`, branch main) 2026-11-18. A7 (in-app updater) built 2026-11-18 as v0.1.3, waiting for the user's test with a real release.**
 
-- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (238 pass).
+- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (306 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
   `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits`: main 20/day confirmed from a real 429 (quotaValue 20, 2026-11-17); lite 1000 still a guess.
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
@@ -12,7 +12,7 @@
 - `dist\Jarvis-0.1.0.zip` built; the user publishes Release `v0.1.0` with it attached (README bottom). Check the
   repo's Releases page shows it before starting A7.
 - Waiting for the user's tests: "clip that" with real OBS, A5 checklist, A8 Live mode, custom wake word (don't ask).
-- A7 (in-app updater) not started; it can use Blink3644/Jarvis releases. Stopgap built 2026-11-18: update.bat/update.ps1 in the zip (manual unzip + double-click, tested on a fake install). v0.1.1 = AQ. Gemini key fix + update.bat.
+- A7 updater: `jarvis/core/updater.py` checks Blink3644/Jarvis releases (once a day at startup + About tab button), verifies, then runs the installed `update.ps1 -Auto` (rollback if the new version exits within 20 s). Uses GitHub's source zip if no zip is attached. Refuses releases whose files' __version__ != tag. Dev copies (.git) can't self-update. Stopgap built 2026-11-18: update.bat/update.ps1 in the zip (manual unzip + double-click, tested on a fake install). v0.1.1 = AQ. Gemini key fix + update.bat.
 - Weekly usage cap 88%.
 
 ## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, waiting for the user's test with real OBS
