@@ -76,3 +76,10 @@ def test_offline_voice_writes_audio_each_time(spk):
         sys.executable, "-c", f"open(r'{path}','wb').write(b'\\x07\\x00')"]
     for _ in range(3):
         assert spk._offline("x")[0] == 7
+
+
+def test_level_db():
+    from jarvis.core.voice.assistant import level_db
+    assert level_db(np.zeros(0, np.int16)) == "n/a"
+    assert level_db(np.full(10, 32767, np.int16)) == "-0 dB" or level_db(np.full(10, 32767, np.int16)) == "0 dB"
+    assert level_db(np.full(10, 1036, np.int16)) == "-30 dB"

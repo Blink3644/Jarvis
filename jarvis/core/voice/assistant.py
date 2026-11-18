@@ -25,6 +25,14 @@ SUB = 320               # 20 ms, what the VAD wants
 SELF_GUARD_S = 0.5      # wake word stays paused this long after Jarvis stops talking
 PREROLL_FRAMES = 8      # 0.64 s kept from before a wake word / key press
 
+def level_db(audio) -> str:
+    """Peak level of a recording in dBFS, for the log ('-6 dB' is loud, below '-30 dB' is too quiet)."""
+    if audio is None or not len(audio):
+        return "n/a"
+    peak = int(np.max(np.abs(audio.astype(np.int32))))
+    return "%.0f dB" % (20 * np.log10(max(peak, 1) / 32768))
+
+
 IDLE, LISTEN, PTT, BUSY, FOLLOWUP, MIC_LOST = "idle", "listen", "ptt", "busy", "followup", "mic_lost"
 
 # Whisper sometimes "hears" these in noise; never treat them as a command on their own.
@@ -351,7 +359,7 @@ class VoiceAssistant:
         t_stt = self.clock()
         if source == "wake":
             text = strip_wake_words(text)
-        log.info("heard (%s, stt %.2fs): %r", source, t_stt - t_end, text)
+        log.info("heard (%s, stt %.2fs, level %s): %r", source, t_stt - t_end, level_db(audio), text)
         if turn["cancelled"]:
             return
         if not _meaningful(text) or is_stop_command(text):

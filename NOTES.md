@@ -66,5 +66,7 @@
   small.en 1.2 s, so mis-hearings likely come from the VB-Cable signal chain. Settings now offer stt_model.
 - Flaky test_wake_command_reply_followup_then_idle: GC ran leftover Tk font __del__ (dead Tk thread, ~1 s per
   call) inside the voice-turn thread. Test-only; fixed with gc.collect() in make().
-- TODO (mis-hearing): check faster-whisper's own vad_filter (log shows it removing up to 2 s) and endpoint
-  cut-offs against real recordings.
+- Mis-hearing: faster-whisper vad_filter is NOT the cause (same text on/off; in the log it removed 0 s in 47/60
+  clips, otherwise trailing silence). Very quiet input reproduces the errors ("via git" -> "by a GIC" at 3% volume).
+  "heard" log lines now include the peak level (e.g. "level -12 dB"); below about -30 dB means the VB-Cable chain is
+  too quiet. Next: read those levels from the user's next session before changing any code.
