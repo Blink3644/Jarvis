@@ -1,6 +1,6 @@
 ﻿# Jarvis — current state
 
-**Stage A1 confirmed by user (2026-11-17). Stages A2, A3 and A4 (minus custom wake-word training) built and self-tested overnight (2026-11-17); waiting for the user's tests (A2_/A3_/A4_MORNING_CHECKLIST.md).**
+**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stages A3 and A4 (minus custom wake-word training) waiting for the user's tests (A3_/A4_MORNING_CHECKLIST.md).**
 
 - Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (147 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
@@ -20,7 +20,7 @@
   (strict reading of "only the selected mic").
 - Self-test (scratch a2_selftest.py, edge-tts clips): 2 voices wake+transcribe exactly; own voice wake 0.003; "stop" works;
   hiss wake 0.33 (<0.5), no false follow-up. STT 0.3 s, backup Gemini first chunk 1.6 s, edge first chunk 0.6-1.5 s.
-- Main model 503 "high demand" can take 24 s to fail -> main gets a 10 s deadline (`main_timeout_s`, server min 10 s),
+- Main model 503 "high demand" can take 24 s to fail -> main gets a 10 s deadline (`main_timeout_s`, server min 10 s), any server error on main goes straight to backup (no retry),
   then backup for 60 s. NOT verified: live mic, speakers, real latency (log `latency:` lines). See A2_MORNING_CHECKLIST.md.
 - Single instance: named mutex; a second launch sets event `Local\JarvisShowSettings` -> running Jarvis opens settings.
 

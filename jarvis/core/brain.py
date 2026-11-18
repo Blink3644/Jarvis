@@ -237,8 +237,8 @@ class Brain:
                         self.blocked_until[model] = self.clock() + datetime.timedelta(seconds=60)
                         break
                     if kind == "server":
-                        if "high demand" in str(e).lower():
-                            server_retry = 0    # overloaded: don't wait, go to backup
+                        if "high demand" in str(e).lower() or (model == main and backup != main):
+                            server_retry = 0    # main busy/stuck: don't retry it, the backup is quicker
                         if server_retry > 0:
                             server_retry -= 1
                             self.sleep(2)
