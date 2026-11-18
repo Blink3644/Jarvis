@@ -14,6 +14,8 @@ import time
 
 import numpy as np
 
+from jarvis.core.secrets import redact
+
 from .endpoint import DONE, SPEAKING, TIMEOUT, EndpointSettings, Endpointer
 from .text import SentenceSplitter, is_stop_command, strip_wake_words
 
@@ -446,7 +448,7 @@ class VoiceAssistant:
     def _check_stop(self, audio):
         try:
             text = self.stt.transcribe(audio, hints=None)
-            log.info("heard while busy: %r", text)
+            log.info("heard while busy: %r", redact(text))
             if is_stop_command(text):
                 self.events.put("stop_heard")
         except Exception:
@@ -492,7 +494,7 @@ class VoiceAssistant:
         t_stt = self.clock()
         if source == "wake":
             text = strip_wake_words(text)
-        log.info("heard (%s, stt %.2fs, level %s): %r", source, t_stt - t_end, level_db(audio), text)
+        log.info("heard (%s, stt %.2fs, level %s): %r", source, t_stt - t_end, level_db(audio), redact(text))
         if turn["cancelled"]:
             return
         if not _meaningful(text) or is_stop_command(text):

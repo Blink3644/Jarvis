@@ -27,10 +27,10 @@ def test_remember_list_persist(reg):
 
 
 def test_forget_is_destructive_and_works(reg):
-    reg.call("remember_note", {"text": "router password is on the fridge"})
+    reg.call("remember_note", {"text": "router manual is on the fridge"})
     r = reg.call("forget_note", {"note": "router"})
     assert r["status"] == "needs_confirmation"
-    assert "forget the note 'router password is on the fridge'" in reg.describe("forget_note", {"note": "router"})
+    assert "forget the note 'router manual is on the fridge'" in reg.describe("forget_note", {"note": "router"})
     assert notes.load_notes()
     r = reg.call("forget_note", {"note": "router"}, confirmed=True)
     assert r["forgotten"] and notes.load_notes() == []
@@ -82,3 +82,22 @@ def test_helpers():
     n = notes.add_note("a")
     assert notes.update_note(n["id"], "b") and notes.load_notes()[0]["text"] == "b"
     assert notes.delete_note(n["id"]) and not notes.delete_note(n["id"])
+
+
+def test_secret_note_never_reaches_prompt(reg):
+    from jarvis.core.secrets import looks_secret, redact
+    reg.begin_turn("remember my router password is hunter2")
+    res = reg.call("remember_note", {"text": "my router password is hunter2"})
+    assert res["secret"] and "tell_user" in res
+    reg.call("remember_note", {"text": "my bike is blue"})
+    listed = json.dumps(reg.call("list_notes", {}))
+    assert "hunter2" not in listed and "router password" in listed and "bike is blue" in listed
+    reg.begin_turn("what's my router password")
+    ctx = reg.extra_context()
+    assert "hunter2" not in ctx and "a saved secret" in ctx
+    stored = notes.load_notes()
+    assert stored[0]["secret"] and stored[0]["text"].endswith("hunter2")   # kept locally
+    assert looks_secret("card 4111 1111 1111 1111") and looks_secret("key sk-abcdefghijklmnop12")
+    assert looks_secret("the wifi PIN is 1234")
+    assert not looks_secret("my base is at 400, -1200") and not looks_secret("buy milk")
+    assert redact("my password is x") != "my password is x"

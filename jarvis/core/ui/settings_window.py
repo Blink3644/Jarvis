@@ -703,7 +703,8 @@ class SettingsWindow:
             row.pack(fill="x", pady=2)
             v = ctk.StringVar(value=n["text"])
             ctk.CTkEntry(row, textvariable=v).pack(side="left", fill="x", expand=True, padx=4)
-            ctk.CTkLabel(row, text=f'{n.get("scope", "global")}  {str(n.get("created", ""))[:10]}',
+            ctk.CTkLabel(row, text=("SECRET (local only)  " if n.get("secret") else "")
+                         + f'{n.get("scope", "global")}  {str(n.get("created", ""))[:10]}',
                          width=130).pack(side="left")
             ctk.CTkButton(row, text="Save", width=56,
                           command=lambda i=n["id"], v=v: self._note_edit(i, v)).pack(side="left", padx=2)
