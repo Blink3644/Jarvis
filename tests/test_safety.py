@@ -68,9 +68,11 @@ def test_real_tool_flags():
         elif hasattr(mod, "register"):
             mod.register(r, {})
     data = {n for n, t in r.tools.items() if t.brings_data}
-    assert data == {"look_at_screen", "listen_to_audio", "get_calendar_events", "list_clickup_tasks"}
+    assert data == {"look_at_screen", "listen_to_audio", "get_calendar_events", "list_clickup_tasks",
+                    "spotify_now_playing"}
     for n in ("copy_to_clipboard", "remember_note", "create_routine", "run_routine", "open_app",
-              "media_control", "set_volume", "set_timer", "add_calendar_event", "create_clickup_task"):
+              "media_control", "set_volume", "set_timer", "add_calendar_event", "create_clickup_task",
+              "spotify_play", "spotify_queue", "spotify_like_current", "spotify_shuffle"):
         assert r.tools[n].side_effect, n
     # No tool may change safety settings by voice (only the settings window can).
     banned = ("confirm", "skip_confirm", "auto_look", "never_screenshot", "allowed_virtual_mics",

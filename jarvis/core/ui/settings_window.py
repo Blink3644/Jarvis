@@ -107,7 +107,7 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
                 errors.append(f"Unknown choice for {k}.")
             else:
                 cfg[k] = f[k]
-    for k in ("clickup_team_id", "clickup_list_id", "clickup_list_name"):
+    for k in ("clickup_team_id", "clickup_list_id", "clickup_list_name", "spotify_client_id"):
         if k in f:
             cfg[k] = str(f[k] or "").strip()
     if "live_model" in f:
@@ -864,6 +864,8 @@ class SettingsWindow:
         self.cu_menu.pack(anchor="w", padx=8)
         self._cu_refresh()
 
+        self._spotify_section(p, c)
+
         self._label(p, "OBS (\"Jarvis, clip that\")", bold=True)
         self._label(p, "Saves the last stretch of gameplay as a video using OBS's Replay Buffer. In OBS: "
                        "Settings > Output > Replay Buffer > tick 'Enable Replay Buffer'; then Tools > WebSocket "
@@ -1029,6 +1031,56 @@ class SettingsWindow:
         self.vars["clickup_enabled"].set(False)
         self._cu_refresh()
         self._say("ClickUp disconnected. Click Save.")
+
+    def _spotify_section(self, p, c):
+        from jarvis.pc import spotify as sp
+        self._label(p, "Spotify (Premium)", bold=True)
+        self.sp_status = self._label(p, "")
+        self._entry(p, "spotify_client_id", c.get("spotify_client_id", ""),
+                    "Your own Spotify Client ID (optional; leave empty to use the built-in one)")
+        row = self.ctk.CTkFrame(p, fg_color="transparent")
+        row.pack(fill="x", padx=8, pady=4)
+        self.ctk.CTkButton(row, text="Connect Spotify", width=130, command=self._sp_connect).pack(side="left")
+        self.ctk.CTkButton(row, text="Disconnect", width=90, fg_color="gray40",
+                           command=self._sp_disconnect).pack(side="left", padx=6)
+        self._label(p, "Connect opens your browser once to log in to Spotify. Using your own Client ID: at "
+                       "developer.spotify.com > Dashboard > Create app, tick 'Web API', and add this Redirect "
+                       f"URI: {sp.REDIRECT_URI}", color="gray60", wrap=640)
+        self._sp_refresh()
+
+    def _sp_refresh(self):
+        from jarvis.pc import spotify as sp
+        if sp.get_refresh_token():
+            txt = "Connected."
+        elif not sp.client_id({"spotify_client_id": self.vars["spotify_client_id"].get()}):
+            txt = "Not set up. Paste a Client ID, then click Connect Spotify."
+        else:
+            txt = "Not connected."
+        self.sp_status.configure(text=txt)
+
+    def _sp_connect(self):
+        from jarvis.pc import spotify as sp
+        cid = sp.client_id({"spotify_client_id": self.vars["spotify_client_id"].get()})
+        if not cid:
+            return self._say("Paste a Spotify Client ID first.")
+        self._say("Log in to Spotify in the browser window that just opened...")
+
+        def work():
+            try:
+                msg = sp.connect(cid) + " Click Save."
+            except sp.SpotifyError as e:
+                msg = str(e)
+            except Exception:
+                log.exception("Spotify connect failed")
+                msg = "Couldn't connect to Spotify. Details are in the log."
+            self._later(lambda: (self._say(msg), self._sp_refresh()))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _sp_disconnect(self):
+        from jarvis.pc import spotify as sp
+        sp.disconnect()
+        self._sp_refresh()
+        self._say("Spotify disconnected.")
 
     def _minecraft(self, tab):
         ctk = self.ctk

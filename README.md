@@ -62,6 +62,7 @@ Windows SmartScreen or your antivirus may warn about a `.bat` file from the inte
 | Say | What happens |
 |---|---|
 | "Hey Jarvis, open Spotify" | Opens an app from your Start Menu, Steam or Epic |
+| "Hey Jarvis, play my Gym playlist" / "play some Daft Punk" | Plays it on Spotify (needs Spotify Premium, connected in Settings > Integrations). Also: "queue ...", "like this song", "what's playing?", shuffle, repeat |
 | "Set the volume to 30" / "next song" | Volume and media control |
 | "Set a timer for 10 minutes" | Speaks when the timer is done |
 | "How do I beat this boss?" (in a game) | Looks at the game window and answers |
@@ -82,6 +83,7 @@ What you say to Jarvis is turned into text **on your PC**. The text of your ques
 - **Screenshots:** in games by default, or only when you ask (Settings → PC → "Let Jarvis look at your screen").
 - **Recordings of your PC's sound:** only when you say "listen to this".
 - **Calendar or ClickUp items:** only if you set those up.
+- **Spotify:** if you connect it, Jarvis uses your Spotify login to search and control playback. Spotify only lets Premium accounts that the Jarvis app owner has added (5 people max) use the built-in connection; anyone else can paste their own Client ID in settings.
 
 **Free tiers may use your data to improve the provider's products.** On Google's free tier, people at Google may read it. Don't share anything you wouldn't want seen.
 

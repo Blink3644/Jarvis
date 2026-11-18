@@ -69,6 +69,7 @@ DEFAULTS = {
     "clickup_team_id": "",
     "clickup_list_id": "",            # default list for new tasks
     "clickup_list_name": "",
+    "spotify_client_id": "",          # empty = use the built-in Client ID
     # ---- "clip that": OBS Replay Buffer via OBS's WebSocket server (password in keyring) ----
     "obs_port": 4455,
     "spoken_sentence_limit_placeholder": None,       # reply mode "both": speak this many sentences, rest on screen (0 = all)
