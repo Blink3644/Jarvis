@@ -1,4 +1,4 @@
-"""Settings window (Stage A4): tabs for General, Voice, PC, Notes, Routines, Minecraft, About.
+"""Settings window (Stage A4): tabs for General, Voice, PC, Notes, Routines, Integrations, Minecraft, About.
 
 Form logic (parsing/validation) is in plain functions at the top so it can be tested
 without a screen. The widgets are below.
@@ -17,6 +17,7 @@ import copy
 import json
 import logging
 import os
+import threading
 
 from .. import config, paths, providers, secrets
 
@@ -106,7 +107,11 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
                 errors.append(f"Unknown choice for {k}.")
             else:
                 cfg[k] = f[k]
-    for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows"):
+    for k in ("clickup_team_id", "clickup_list_id", "clickup_list_name"):
+        if k in f:
+            cfg[k] = str(f[k] or "").strip()
+    for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows",
+              "calendar_enabled", "clickup_enabled"):
         if k in f:
             cfg[k] = bool(f[k])
     if "wake_model" in f:
@@ -328,7 +333,7 @@ class SettingsWindow:
         ctk = self.ctk
         self.tabs = ctk.CTkTabview(self.win, command=self._tab_changed)
         self.tabs.pack(fill="both", expand=True, padx=8, pady=(8, 0))
-        for name in ("General", "AI providers", "Voice", "PC", "Notes", "Routines", "Minecraft", "About"):
+        for name in ("General", "AI providers", "Voice", "PC", "Notes", "Routines", "Integrations", "Minecraft", "About"):
             self.tabs.add(name)
         self._general(self.tabs.tab("General"))
         self._providers_tab(self.tabs.tab("AI providers"))
@@ -336,6 +341,7 @@ class SettingsWindow:
         self._pc(self.tabs.tab("PC"))
         self._notes(self.tabs.tab("Notes"))
         self._routines(self.tabs.tab("Routines"))
+        self._integrations(self.tabs.tab("Integrations"))
         self._minecraft(self.tabs.tab("Minecraft"))
         self._about(self.tabs.tab("About"))
         bar = ctk.CTkFrame(self.win, fg_color="transparent")
@@ -794,6 +800,161 @@ class SettingsWindow:
         self._fill_routines()
         self._say("Routine saved.")
 
+    # ---- Google Calendar and ClickUp (Stage A5)
+    def _integrations(self, tab):
+        ctk, c = self.ctk, self.cfg
+        p = self._scroll(tab)
+        self._label(p, "Optional. Leave these off if you don't use them. When they're on, Jarvis can read and "
+                       "add events or tasks, and the 'Daily brief' greeting mentions today's.", wrap=640)
+        self._label(p, "Google Calendar", bold=True)
+        self._check(p, "calendar_enabled", c.get("calendar_enabled", False), "Use Google Calendar")
+        self.gcal_status = self._label(p, "")
+        row = ctk.CTkFrame(p, fg_color="transparent")
+        row.pack(fill="x", padx=8, pady=4)
+        ctk.CTkButton(row, text="Setup guide", width=110, command=self._gcal_guide).pack(side="left")
+        ctk.CTkButton(row, text="1. Choose credentials.json", width=190,
+                      command=self._gcal_pick).pack(side="left", padx=6)
+        ctk.CTkButton(row, text="2. Connect Google account", width=190,
+                      command=self._gcal_connect).pack(side="left")
+        ctk.CTkButton(p, text="Disconnect Google", width=150, fg_color="gray40",
+                      command=self._gcal_disconnect).pack(anchor="w", padx=8, pady=2)
+        self._gcal_refresh()
+
+        self._label(p, "ClickUp", bold=True)
+        self._check(p, "clickup_enabled", c.get("clickup_enabled", False), "Use ClickUp")
+        self.cu_status = self._label(p, "")
+        row = ctk.CTkFrame(p, fg_color="transparent")
+        row.pack(fill="x", padx=8, pady=4)
+        self.cu_entry = ctk.CTkEntry(row, show="*", width=300,
+                                     placeholder_text="Paste your ClickUp token (starts with pk_)")
+        self.cu_entry.pack(side="left")
+        ctk.CTkButton(row, text="Connect", width=90, command=self._cu_connect).pack(side="left", padx=6)
+        ctk.CTkButton(row, text="Disconnect", width=90, fg_color="gray40",
+                      command=self._cu_disconnect).pack(side="left")
+        self._label(p, "Where to get the token: in ClickUp click your avatar (bottom left) > Settings > "
+                       "Apps > API Token > Generate, then Copy.", color="gray60")
+        self._label(p, "List for new tasks")
+        self.cu_lists = {}                      # label -> list dict
+        self.cu_team = c.get("clickup_team_id", "")
+        cur = c.get("clickup_list_name") or "(connect first)"
+        self.cu_list_var = ctk.StringVar(value=cur)
+        self.cu_menu = ctk.CTkOptionMenu(p, variable=self.cu_list_var, values=[cur], width=300)
+        self.cu_menu.pack(anchor="w", padx=8)
+        self._cu_refresh()
+
+    def _later(self, fn):
+        try:
+            self.win.after(0, fn)
+        except Exception:
+            pass
+
+    def _gcal_refresh(self):
+        from jarvis.pc import google_calendar as g
+        if g.is_connected():
+            t = "Connected."
+        elif g.has_credentials():
+            t = "credentials.json is in place. Next: Connect Google account."
+        else:
+            t = "Not set up. Open the Setup guide (about 10 minutes, once)."
+        self.gcal_status.configure(text=t)
+
+    def _gcal_guide(self):
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        try:
+            os.startfile(os.path.join(root, "GOOGLE_CALENDAR_SETUP.md"))
+        except Exception:
+            log.exception("could not open the calendar guide")
+            self._say("Open GOOGLE_CALENDAR_SETUP.md in the Jarvis folder.")
+
+    def _gcal_pick(self):
+        from tkinter import filedialog
+        from jarvis.pc import google_calendar as g
+        path = filedialog.askopenfilename(parent=self.win, title="Choose credentials.json",
+                                          filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+        if not path:
+            return
+        err = g.import_credentials(path)
+        self._say(err or "credentials.json saved. Now click Connect Google account.")
+        self._gcal_refresh()
+
+    def _gcal_connect(self):
+        from jarvis.pc import google_calendar as g
+        if not g.has_credentials():
+            return self._say("Choose your credentials.json first.")
+        self._say("Your browser will open. Sign in to Google and click Allow (you have 5 minutes).")
+
+        def work():
+            err = g.connect()
+
+            def done():
+                if not err:
+                    self.vars["calendar_enabled"].set(True)
+                self._say(err or "Google Calendar connected. Click Save.")
+                self._gcal_refresh()
+            self._later(done)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _gcal_disconnect(self):
+        from jarvis.pc import google_calendar as g
+        g.disconnect()
+        self.vars["calendar_enabled"].set(False)
+        self._gcal_refresh()
+        self._say("Google Calendar disconnected. Click Save.")
+
+    def _cu_refresh(self):
+        from jarvis.pc import clickup as cu
+        self.cu_status.configure(text="Connected." if cu.get_token() and self.cu_team else "Not set up.")
+
+    def _cu_connect(self):
+        from jarvis.pc import clickup as cu
+        token = secrets.clean_key(self.cu_entry.get()) or cu.get_token() or ""
+        if not cu.looks_like_token(token):
+            return self._say("Paste your ClickUp token first (it starts with pk_).")
+        self._say("Checking the token with ClickUp...")
+
+        def work():
+            try:
+                client = cu.Client(token)
+                teams = client.teams()
+                if not teams:
+                    raise cu.ClickUpError("That token has no ClickUp workspace.")
+                team = teams[0]
+                lists = client.lists(team["id"])
+                err = ""
+            except cu.ClickUpError as e:
+                err, team, lists = str(e), None, []
+            except Exception:
+                log.exception("ClickUp connect failed")
+                err, team, lists = "Couldn't connect to ClickUp. Details are in the log.", None, []
+            self._later(lambda: self._cu_connected(token, err, team, lists))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _cu_connected(self, token, err, team, lists):
+        from jarvis.pc import clickup as cu
+        if err:
+            return self._say(err)
+        cu.set_token(token)
+        self.cu_entry.delete(0, "end")
+        self.cu_team = team["id"]
+        self.cu_lists = {f"{li['name']}  ({li['where']})": li for li in lists}
+        labels = list(self.cu_lists) or ["(no lists found)"]
+        self.cu_menu.configure(values=labels)
+        keep = next((lab for lab, li in self.cu_lists.items()
+                     if li["id"] == self.cfg.get("clickup_list_id")), labels[0])
+        self.cu_list_var.set(keep)
+        self.vars["clickup_enabled"].set(True)
+        self._cu_refresh()
+        self._say(f"Connected to the {team['name']} workspace. Pick a list, then click Save.")
+
+    def _cu_disconnect(self):
+        from jarvis.pc import clickup as cu
+        cu.disconnect()
+        self.cu_team = ""
+        self.cu_lists = {}
+        self.vars["clickup_enabled"].set(False)
+        self._cu_refresh()
+        self._say("ClickUp disconnected. Click Save.")
+
     def _minecraft(self, tab):
         ctk = self.ctk
         self._label(tab, "Coming in Part B", bold=True)
@@ -879,6 +1040,13 @@ class SettingsWindow:
         form["game_list"] = parse_list(self.games_box.get("1.0", "end"))
         form["never_screenshot"] = parse_list(self.never_box.get("1.0", "end"))
         form["virtual_inputs"] = getattr(self, "virtual_inputs", [])
+        if hasattr(self, "cu_list_var"):
+            form["clickup_team_id"] = self.cu_team
+            li = self.cu_lists.get(self.cu_list_var.get())
+            if li:
+                form["clickup_list_id"], form["clickup_list_name"] = li["id"], li["name"]
+            elif not self.cu_team:
+                form["clickup_list_id"] = form["clickup_list_name"] = ""
         return form
 
     def save(self):

@@ -4,6 +4,7 @@ Threads: the panel owns the only Tk thread; the settings window is created on it
 overlay.call(). The tray runs on its own pystray thread. Voice runs on its own threads.
 """
 import datetime
+import importlib
 import logging
 import threading
 
@@ -187,7 +188,14 @@ class App:
             from jarvis.pc.weather import make_get_weather
             return weather_line(make_get_weather(self.cfg), city)
         try:
-            text = greeting.startup_text(self.cfg, datetime.datetime.now(), weather_fn)
+            extras = []
+            for mod in ("google_calendar", "clickup"):      # optional; '' when not set up
+                try:
+                    m = importlib.import_module(f"jarvis.pc.{mod}")
+                    extras.append(lambda m=m: m.brief_line(self.cfg))
+                except Exception:
+                    log.exception("brief source %s unavailable", mod)
+            text = greeting.startup_text(self.cfg, datetime.datetime.now(), weather_fn, extras)
         except Exception:
             log.exception("greeting failed")
             return

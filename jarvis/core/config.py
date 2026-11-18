@@ -58,7 +58,14 @@ DEFAULTS = {
     "overlay_pos": None,              # [x, y] once the user has moved it
     "start_with_windows": False,
     "startup_greeting": "simple",     # off | simple | brief
-    "spoken_sentence_limit": 3,       # reply mode "both": speak this many sentences, rest on screen (0 = all)
+    "spoken_sentence_limit": 3,
+    # ---- optional integrations (Stage A5), off by default; secrets live in keyring ----
+    "calendar_enabled": False,
+    "clickup_enabled": False,
+    "clickup_team_id": "",
+    "clickup_list_id": "",            # default list for new tasks
+    "clickup_list_name": "",
+    "spoken_sentence_limit_placeholder": None,       # reply mode "both": speak this many sentences, rest on screen (0 = all)
 }
 
 PERSONALITIES = ("butler", "casual", "direct")

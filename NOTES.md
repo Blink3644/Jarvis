@@ -1,11 +1,20 @@
 # Jarvis — current state
 
-**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Next: Stage A5.**
+**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Next after confirmation: Stage A6.**
 
-- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (166 pass).
+- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (210 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
   `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits`: main 20/day confirmed from a real 429 (quotaValue 20, 2026-11-17); lite 1000 still a guess.
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
+
+## Stage A5 (optional integrations) — `jarvis/pc/google_calendar.py`, `jarvis/pc/clickup.py`
+- Off by default. `Tool.available` (new) hides a tool from the AI and refuses calls unless on + connected, so friends never see them.
+- Calendar: REST v3 via httpx, scope `calendar.events`, user's own Desktop-app OAuth client copied to %APPDATA%/Jarvis/google_credentials.json;
+  sign-in via google-auth-oauthlib 1.5.0 `run_local_server(port=0)`; refresh token in keyring `Jarvis/google_calendar_token`.
+  Testing-mode Google apps expire refresh tokens after 7 days (guide says how to publish). Guide: GOOGLE_CALENDAR_SETUP.md.
+- ClickUp: API v2, personal token (pk_) in keyring `Jarvis/clickup_token`; first workspace used; default list picked in settings.
+- add_calendar_event / create_clickup_task ask for a yes (read back date/name). Daily brief greeting adds both (app._greet extras).
+- Tests use an in-memory keyring (conftest autouse) — never the real Credential Manager. NOT verified live (no real Google/ClickUp calls).
 
 ## Stage A2 (voice) — `jarvis/core/voice/`
 - assistant.py state machine: idle(wake) / listen / ptt / busy(think+speak, listens only for "stop") / followup / mic_lost.

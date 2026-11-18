@@ -23,6 +23,7 @@ class Tool:
     module: str = "core"
     confirm_text: Callable[[dict], str] | None = None   # e.g. "close Chrome"
     visual: bool = True         # False = obviously not about the screen (skip auto-look)
+    available: Callable[[], bool] | None = None   # None = always; False hides it (e.g. not set up)
 
 
 @dataclass
@@ -135,13 +136,24 @@ class Registry:
     def add_attachments(self, provider: Callable[[str], list[Media]]) -> None:
         self.attachment_providers.append(provider)
 
+    @staticmethod
+    def is_available(tool: Tool) -> bool:
+        if tool.available is None:
+            return True
+        try:
+            return bool(tool.available())
+        except Exception:
+            log.exception("availability check failed for %s", tool.name)
+            return False
+
     def declarations(self) -> list[dict]:
         return [{"name": t.name, "description": t.description,
-                 "parameters_json_schema": t.parameters} for t in self.tools.values()]
+                 "parameters_json_schema": t.parameters}
+                for t in self.tools.values() if self.is_available(t)]
 
     def call(self, name: str, args: dict | None, confirmed: bool = False) -> dict:
         tool = self.tools.get(name)
-        if tool is None:
+        if tool is None or not self.is_available(tool):
             return {"error": f"Unknown tool {name}"}
         args = dict(args or {})
         try:

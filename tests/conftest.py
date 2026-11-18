@@ -43,3 +43,27 @@ class FakeModels:
 class FakeClient:
     def __init__(self, script):
         self.models = FakeModels(script)
+
+
+class MemoryKeyring:
+    """In-memory stand-in so tests never touch the real Windows Credential Manager."""
+    def __init__(self):
+        self.store = {}
+
+    def get_password(self, service, user):
+        return self.store.get((service, user))
+
+    def set_password(self, service, user, pw):
+        self.store[(service, user)] = pw
+
+    def delete_password(self, service, user):
+        self.store.pop((service, user), None)
+
+
+@pytest.fixture(autouse=True)
+def memory_keyring(monkeypatch):
+    import keyring
+    kr = MemoryKeyring()
+    for name in ("get_password", "set_password", "delete_password"):
+        monkeypatch.setattr(keyring, name, getattr(kr, name))
+    return kr
