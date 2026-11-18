@@ -1,4 +1,5 @@
 """The voice loop with fake parts: wake -> command -> reply -> follow-up -> idle, and "stop"."""
+import gc
 import queue
 import threading
 import time
@@ -127,6 +128,10 @@ class FakeUI:
 
 
 def make(stt_texts, replies, gate=None, **cfg):
+    # Collect leftover Tk objects from earlier UI tests here, on the main thread. Otherwise the
+    # garbage collector may run their __del__ inside a voice thread, where each Tcl call waits
+    # ~1 s for a Tk thread that no longer exists, and the turn misses the test's 5 s timeout.
+    gc.collect()
     clock = Clock()
     c = {"followup_seconds": 5, "max_record_seconds": 15, "end_silence_ms": 800,
          "wake_enabled": True, "wake_sensitivity": 0.5, "reply_mode": "both",
@@ -153,7 +158,8 @@ def test_wake_command_reply_followup_then_idle():
                                   ["It's noon, sir. Anything else?", "The 17th."])
     try:
         mic.feed(*[SIL] * 5, WAKE, *[SPEECH] * 10, *[SIL] * 12)
-        assert wait_for(lambda: brain.asked == ["what time is it?"])
+        assert wait_for(lambda: brain.asked == ["what time is it?"]), \
+            (brain.asked, va.state, mic.q.qsize(), mic.clock.t, va.thread.is_alive())
         assert wait_for(lambda: va.state == A.FOLLOWUP)
         assert sp.said == ["It's noon, sir.", "Anything else?"]
         # follow-up question without the wake word (after the 0.5 s self-guard)

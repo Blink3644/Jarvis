@@ -57,14 +57,14 @@
   NOT verified: a real Colab-trained model.
 - NOT verified: real look on screen, dragging the panel, game FPS, autostart reboot.
 
-## Voice fixes in progress (2026-11-17, branch claude/elated-shamir-b6680d, NOT merged to main)
-- Log evidence: edge-tts `NoAudioReceived` at 17:52:35 and 17:58:34 -> pyttsx3 fallback; the NEXT reply got
-  text but was never spoken (pyttsx3 runAndWait hangs on a reused engine) -> Jarvis stuck "busy" until restart.
-- Fixed: edge-tts tried twice per sentence; unspeakable chunks (```, **, ---) skipped (likely cause of
-  NoAudioReceived); offline voice runs in a child process with a 20 s timeout (real test: 3 calls ok, 0.35 s each);
-  online voice retried after 30 s. Tests: tests/test_voice_speaker.py (6 pass).
-- STT: base.en and small.en both transcribe a clean synthetic clip perfectly (30% volume + noise):
-  base.en 0.4 s, small.en 1.2 s. So errors ("via fit/pit" for git) likely come from the VB-Cable signal chain.
-  Added settings choice stt_model (base.en / small.en).
-- OPEN: tests/test_voice_assistant.py::test_wake_command_reply_followup_then_idle fails in the full suite on this
-  branch (passes alone; passes on main). Uses FakeSpeaker, so cause unclear. Fix, then ff main.
+## Voice fixes (2026-11-17, merged to main)
+- Log evidence: edge-tts `NoAudioReceived` -> pyttsx3 fallback; the NEXT reply was never spoken (pyttsx3
+  runAndWait hangs on a reused engine) -> Jarvis stuck "busy" until restart.
+- Fixed: edge-tts tried twice per sentence; unspeakable chunks (```, **, ---) skipped; offline voice runs in a
+  child process with a 20 s timeout (real test: 3 calls ok, 0.35 s each); online voice retried after 30 s.
+- STT: base.en and small.en both transcribe a clean synthetic clip perfectly (30% volume + noise): base.en 0.4 s,
+  small.en 1.2 s, so mis-hearings likely come from the VB-Cable signal chain. Settings now offer stt_model.
+- Flaky test_wake_command_reply_followup_then_idle: GC ran leftover Tk font __del__ (dead Tk thread, ~1 s per
+  call) inside the voice-turn thread. Test-only; fixed with gc.collect() in make().
+- TODO (mis-hearing): check faster-whisper's own vad_filter (log shows it removing up to 2 s) and endpoint
+  cut-offs against real recordings.
