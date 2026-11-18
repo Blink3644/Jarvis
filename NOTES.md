@@ -9,7 +9,7 @@
 
 ## Safety rules (2026-11-17) — `jarvis/core/registry.py`, `tests/test_safety.py`
 - `Tool.side_effect` (default True), `Tool.brings_data`, `Tool.gate`. `registry.tainted` is set when a data tool runs or an auto-look screenshot is attached; then side-effect tools need confirm_action in a later turn.
-- Secret notes: `jarvis/core/secrets.py` `looks_secret` (lenient: 'password', 'PIN', card/key shapes) -> note gets `secret`+`title`; AI sees the title only (`notes.shown_text`); settings list shows 'SECRET (local only)'; heard-text log lines are redacted. The 'Save a readable log' history file still holds what was said (user's own choice). Not done: privacy line in the settings window; search-grounding taint isn't detected.
+- Secret notes: `jarvis/core/secrets.py` `looks_secret` (lenient: 'password', 'PIN', card/key shapes) -> note gets `secret`+`title`; AI sees the title only (`notes.shown_text`); settings list shows 'SECRET (local only)'; heard-text log lines are redacted. The 'Save a readable log' history file still holds what was said (user's own choice). Privacy line is at the top of the Brain/key settings tab. Not done: search-grounding taint isn't detected.
 - **For the A6 README privacy note:** questions, transcripts, notes sent in prompts, Calendar/ClickUp data, and screenshots/PC audio (only when asked) go to whichever AI providers the user added (Gemini, OpenAI, Anthropic, Groq...), not just Google. Free tiers may use data for training.
 
 ## Stage A8 (Gemini Live, experimental) — `jarvis/core/voice/live.py`, state LIVE in assistant.py

@@ -34,7 +34,7 @@ REPLY_LABELS = {"spoken": "Spoken", "text": "On-screen text", "both": "Both"}
 PERSONALITY_LABELS = {"butler": "Butler", "casual": "Casual friend", "direct": "Straight to the point"}
 HISTORY_LABELS = {"session": "Session only (forget when Jarvis closes)",
                   "log": "Save a readable log (Jarvis doesn't reuse it)",
-                  "remember": "Remember recent conversations (sends more data to Google)"}
+                  "remember": "Remember recent conversations (sends more data to your AI services)"}
 GREETING_LABELS = {"off": "Off", "simple": "Simple greeting", "brief": "Daily brief"}
 THEME_LABELS = {"hud": "HUD (glowing orb)", "minimal": "Minimal"}
 VOICES = ["en-GB-RyanNeural", "en-GB-ThomasNeural", "en-GB-SoniaNeural", "en-US-GuyNeural",
@@ -365,6 +365,10 @@ class SettingsWindow:
     def _general(self, tab):
         ctk, c = self.ctk, self.cfg
         p = self._scroll(tab)
+        self._label(p, "Privacy: your questions, relevant notes (never secret ones), Calendar/ClickUp details, "
+                       "and screenshots or PC audio when you ask, are sent to the AI services you add here "
+                       "(Google, OpenAI, Anthropic, etc.). Free tiers may use this data to improve their products.",
+                    color="orange")
         self._label(p, "Google Gemini API key", bold=True)
         self.key_status = self._label(p, mask_key(secrets.get_api_key()))
         row = ctk.CTkFrame(p, fg_color="transparent")
@@ -671,7 +675,7 @@ class SettingsWindow:
         self.games_box.pack(fill="x", padx=8)
         self.games_box.insert("1.0", ", ".join(c["game_list"]))
         self._menu(p, "auto_look", AUTO_LOOK_LABELS, c["auto_look"], "Let Jarvis look at your screen")
-        self._label(p, 'Warning: "Always" sends whatever is on your screen to Google with every question.',
+        self._label(p, 'Warning: "Always" sends whatever is on your screen to your AI service with every question.',
                     color="orange")
         self._label(p, "Never take a screenshot when the window name contains (separated by commas)")
         self.never_box = ctk.CTkTextbox(p, height=60)
