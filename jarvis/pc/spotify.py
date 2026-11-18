@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 
 # The project owner's Spotify app. Friends the owner adds in the Spotify dashboard can use it as-is;
 # anyone else pastes their own Client ID in settings. A Client ID is not a secret.
-BUILTIN_CLIENT_ID = ""
+BUILTIN_CLIENT_ID = "5f4f7c415c634c1b87127120ecabac74"
 PORT = 8765
 REDIRECT_URI = f"http://127.0.0.1:{PORT}/callback"
 AUTH_URL = "https://accounts.spotify.com/authorize"
