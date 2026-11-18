@@ -1,0 +1,9 @@
+# Developer notes stay in git but are left out of the friends' zip (make_zip.bat / git archive).
+CLAUDE.md export-ignore
+NOTES.md export-ignore
+A*_CHECKLIST.md export-ignore
+A*_MORNING_CHECKLIST.md export-ignore
+run_gui_test.bat export-ignore
+.gitattributes export-ignore
+# Batch files must keep Windows line endings or cmd.exe misreads them.
+*.bat text eol=crlf
