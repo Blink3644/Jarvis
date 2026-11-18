@@ -4,7 +4,7 @@
 
 - Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (147 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
-  `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits` are placeholders (250/1000).
+  `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits`: main 20/day confirmed from a real 429 (quotaValue 20, 2026-11-17); lite 1000 still a guess.
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
 
 ## Stage A2 (voice) — `jarvis/core/voice/`
@@ -32,6 +32,7 @@
   destructive), weather.py (Open-Meteo; httpx missing -> falls back to httpx2 from google-genai), timers.py (in memory,
   `register` returns the manager; announce via registry.announce), notes.py (notes.json, scopes, keyword context),
   routines.py (create/run/delete confirmed; steps validated, no listen/look/routine tools inside routines;
+  routine names+steps go into the prompt context so "start my music" runs routine "start music" (verified live).
   after an open_app step it waits for the app window (max 20 s) + 2 s before the next step; `wait` tool for explicit pauses).
 - core/game_profiles.py + games.py (foreground exe vs libraries / game_list / fullscreen heuristic, context line),
   screen.py (look_at_screen + auto-look "games"; mss.MSS; black-capture and never_screenshot checks),

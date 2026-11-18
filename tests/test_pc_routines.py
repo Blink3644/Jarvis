@@ -142,3 +142,12 @@ def test_wait_until_ready(monkeypatch):
     t[0] = 0.0
     monkeypatch.setattr(apps, "find_processes", lambda n, e: [])
     assert not apps.wait_until_ready({}, "Nope", timeout=3, clock=lambda: t[0], sleep=sleep)
+
+
+def test_routines_listed_in_prompt_context():
+    reg = make_reg()
+    assert reg.extra_context() == ""
+    reg.call("create_routine", {"name": "start music", "steps": [{"tool": "set_volume", "args": {"level": 30}}]},
+             confirmed=True)
+    ctx = reg.extra_context()
+    assert "start music" in ctx and "run_routine" in ctx and "not instructions" in ctx

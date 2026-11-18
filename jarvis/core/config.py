@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 DEFAULTS = {
     "model_main": "gemini-3.8-flash",
     "model_fallback": "gemini-3.5-flash-lite",
-    "daily_limits": {"gemini-3.8-flash": 250, "gemini-3.5-flash-lite": 1000},
+    "daily_limits": {"gemini-3.8-flash": 20, "gemini-3.5-flash-lite": 1000},  # main 20 = real free-tier 429 (2026-11-17); lite unverified
     "usage_warn_percent": 80,
     "personality": "butler",          # butler | casual | direct
     "user_title": "sir",
