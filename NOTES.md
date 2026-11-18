@@ -1,6 +1,6 @@
 # Jarvis — current state
 
-**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. Stage A6 (setup.bat, run.bat, make_zip.bat, README) built 2026-11-18; clean install tested (238 pass in fresh copy); needs a GitHub repo URL from the user to push. A7 not started.**
+**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. Stage A6 (setup.bat, run.bat, make_zip.bat, README) built 2026-11-18; clean install tested (238 pass in fresh copy); pushed to https://github.com/Blink3644/Jarvis (public, `origin`, branch main) 2026-11-18. A7 not started.**
 
 - Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (238 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
@@ -8,13 +8,12 @@
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
 
 ## Handover (2026-11-18)
-- Next job: push Jarvis to GitHub. No remote yet, no `gh` CLI. User creates a PUBLIC repo `Jarvis` at github.com/new
-  (no README/.gitignore/license), pastes the URL; then `git remote add origin <url>` and `git push -u origin main`
-  (Git Credential Manager sign-in window: the user signs in). Then the user runs `make_zip.bat` and attaches
-  `dist\Jarvis-<ver>.zip` to a GitHub Release (steps at the bottom of README.md).
+- Code is on GitHub: https://github.com/Blink3644/Jarvis (`origin`, main tracks origin/main). Push after each commit.
+- `dist\Jarvis-0.1.0.zip` built; the user publishes Release `v0.1.0` with it attached (README bottom). Check the
+  repo's Releases page shows it before starting A7.
 - Waiting for the user's tests: "clip that" with real OBS, A5 checklist, A8 Live mode, custom wake word (don't ask).
-- A7 (updater) not started; needs the GitHub repo first.
-- Weekly usage cap 88% (was 85% at handover).
+- A7 (updater) not started; it can now use Blink3644/Jarvis releases.
+- Weekly usage cap 88%.
 
 ## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, waiting for the user's test with real OBS
 - Tool `clip_that`: OBS Replay Buffer via obs-websocket v5 (OBS 28+, port `obs_port` 4455, password in keyring
