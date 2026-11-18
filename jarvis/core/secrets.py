@@ -11,7 +11,9 @@ def clean_key(raw: str) -> str:
 
 
 def looks_like_key(key: str) -> bool:
-    return len(key) >= 30 and all(c.isalnum() or c in "-_" for c in key)
+    # Old Gemini keys are "AIza...", new ones (late 2025+) are "AQ.Ab..." with a dot,
+    # so allow dots too. The "Test key" button is the real check.
+    return len(key) >= 30 and all(c.isascii() and (c.isalnum() or c in "-_.") for c in key)
 
 
 def clipboard_text() -> str:
@@ -77,7 +79,8 @@ _SECRET_WORDS = _re.compile(
     r"card numbers?|credit card|debit card|cvv|cvc|security codes?|social security|ssn|"
     r"recovery (codes?|phrases?)|seed phrases?|wi-?fi key|login|log-in)\b", _re.I)
 _SECRET_SHAPES = _re.compile(
-    r"\b(?:\d[ -]?){13,19}\b|\b(?:sk|pk|rk)-[A-Za-z0-9_-]{12,}|\bAIza[0-9A-Za-z_-]{20,}|"
+    r"\b(?:\d[ -]?){13,19}\b|\b(?:sk|pk|rk)-[A-Za-z0-9_-]{12,}|\bAIza[0-9A-Za-z_-]{20,}|\bAQ\.[0-9A-Za-z_.-]{20,}|"
+    r"\bgsk_[A-Za-z0-9]{20,}|"
     r"\bgh[pousr]_[A-Za-z0-9]{20,}|\bxox[abp]-[A-Za-z0-9-]{10,}")
 
 

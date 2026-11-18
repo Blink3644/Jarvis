@@ -123,7 +123,7 @@ def ask_key():
     typed = secrets.clean_key(getpass.getpass("Key: "))
     key = typed if secrets.looks_like_key(typed) else secrets.clean_key(secrets.clipboard_text())
     if not secrets.looks_like_key(key):
-        print("That doesn't look like a Gemini key (it should be a long code starting with AIza).")
+        print("That doesn't look like a Gemini key (it should be a long code starting with AIza or AQ.).")
         print("Nothing saved. Copy the key again and type /key.")
         return
     secrets.set_api_key(key)

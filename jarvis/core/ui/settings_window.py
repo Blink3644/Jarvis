@@ -1131,7 +1131,8 @@ class SettingsWindow:
         key = secrets.clean_key(self.key_entry.get())
         if key:
             if not secrets.looks_like_key(key):
-                return self._say("That doesn't look like a Gemini API key.")
+                return self._say("The Gemini key box (General tab) has something that isn't "
+                                 "a key in it. Clear that box, or paste the key again, then Save.")
             secrets.set_api_key(key)
             self.key_entry.delete(0, "end")
             self.key_status.configure(text=mask_key(key))
