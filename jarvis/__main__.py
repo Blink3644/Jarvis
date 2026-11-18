@@ -74,7 +74,7 @@ class ConsoleUI:
 
 
 PC_MODULES = ("apps", "media", "system", "weather", "timers", "notes", "routines",
-              "games", "screen", "listen")
+              "games", "screen", "listen", "clipboard")
 
 
 

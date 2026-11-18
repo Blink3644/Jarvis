@@ -55,6 +55,7 @@ class Registry:
         # set when the user interrupts (says "stop" / presses push-to-talk); long tools should check it
         self.cancel = threading.Event()
         self.last_user_text = ""
+        self.last_reply = ""        # Jarvis's previous answer (set by the brain), e.g. for "copy that"
         self.turn = 0
         self.pending: dict[str, tuple[str, dict, int]] = {}
         self._ids = itertools.count(1)

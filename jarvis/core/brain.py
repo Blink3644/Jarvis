@@ -131,6 +131,7 @@ class Brain:
         if not final:
             final = "Done." if tools_used else "Sorry, I didn't get an answer back. Could you try again?"
         self.conv.commit(_without_media(exchange), text, final)
+        self.registry.last_reply = final
         self.history.log_line("You", text)
         self.history.log_line("Jarvis", final)
         return Reply(final, notices=notices, tools_used=tools_used)

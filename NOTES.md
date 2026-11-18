@@ -37,6 +37,8 @@
 - core/game_profiles.py + games.py (foreground exe vs libraries / game_list / fullscreen heuristic, context line),
   screen.py (look_at_screen + auto-look "games"; mss.MSS; black-capture and never_screenshot checks),
   listen.py (PyAudioWPatch loopback; only when the request asks to listen/hear/song; loopback gives no frames in silence).
+- clipboard.py (added 2026-11-17, waiting for the user's test): copy_to_clipboard(text | last_answer) via ctypes Win32,
+  sets the clipboard only (never pastes/types), max 20k chars, text never logged; brain sets registry.last_reply.
 - Live with Gemini (backup model, startfile faked): 13 requests all correct incl. confirmations. Not verified: real
   open/close, volume set, media keys, spoken timer, in-game screenshot/auto-look, real audio, Epic.
 
