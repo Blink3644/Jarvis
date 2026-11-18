@@ -55,6 +55,14 @@ Double-click **setup.bat** in that folder. It needs **Python 3.12**:
 
 Windows SmartScreen or your antivirus may warn about a `.bat` file from the internet. That's normal for small free projects. Click **More info → Run anyway** only if you got Jarvis from someone you trust.
 
+### Updating to a new version
+
+1. Download the new Jarvis zip and unzip it somewhere **other than** your Jarvis folder (Downloads is fine).
+2. Open the unzipped folder and double-click **update.bat**.
+3. It finds your Jarvis, shows the old and new version numbers, and asks **Y/N**. Type `Y` and press Enter.
+
+It closes Jarvis, swaps in the new files and starts Jarvis again. Your settings, notes and keys are kept. The old version is saved in a `_previous` folder inside your Jarvis folder. If it can't find Jarvis, drag your Jarvis folder (the one with `run.bat`) into the window and press Enter. You can delete the unzipped update folder afterwards.
+
 ---
 
 ## Things to try
@@ -130,3 +138,4 @@ Free AI keys allow only a certain number of questions per minute and per day.
 1. Raise `__version__` in `jarvis/__init__.py` and commit.
 2. Double-click **make_zip.bat**. It makes `dist\Jarvis-<version>.zip` from the last commit. Your notes and keys aren't in it.
 3. On GitHub: **Releases → Draft a new release**. Make a tag like `v0.2.0`, write what changed, attach the zip, and click **Publish release**.
+4. Friends who already have Jarvis use the same zip: they unzip it and double-click **update.bat** (see "Updating to a new version").

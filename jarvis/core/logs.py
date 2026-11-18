@@ -5,7 +5,8 @@ from logging.handlers import RotatingFileHandler
 
 from . import paths
 
-_KEY_RE = re.compile(r"AIza[0-9A-Za-z_\-]{20,}|(key=)[^&\s'\"]+")
+_KEY_RE = re.compile(r"AIza[0-9A-Za-z_\-]{20,}|\bAQ\.[0-9A-Za-z_.\-]{20,}|\bgsk_[0-9A-Za-z]{20,}"
+                     r"|(key=)[^&\s'\"]+")
 
 
 def redact(msg: str, key: str | None = None) -> str:

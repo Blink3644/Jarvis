@@ -12,7 +12,7 @@
 - `dist\Jarvis-0.1.0.zip` built; the user publishes Release `v0.1.0` with it attached (README bottom). Check the
   repo's Releases page shows it before starting A7.
 - Waiting for the user's tests: "clip that" with real OBS, A5 checklist, A8 Live mode, custom wake word (don't ask).
-- A7 (updater) not started; it can now use Blink3644/Jarvis releases.
+- A7 (in-app updater) not started; it can use Blink3644/Jarvis releases. Stopgap built 2026-11-18: update.bat/update.ps1 in the zip (manual unzip + double-click, tested on a fake install). v0.1.1 = AQ. Gemini key fix + update.bat.
 - Weekly usage cap 88%.
 
 ## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, waiting for the user's test with real OBS

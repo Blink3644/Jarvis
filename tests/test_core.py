@@ -104,6 +104,17 @@ def test_key_cleaning():
     good = "AIza" + "x" * 35
     assert secrets.clean_key(f" {good}\r\n") == good and secrets.looks_like_key(good)
     assert not secrets.looks_like_key("\x16\x16") and not secrets.looks_like_key("wrong")
+    new = "AQ.Ab8RN6" + "x_-" * 15                    # new-style Gemini key has a dot
+    assert secrets.looks_like_key(new) and secrets.looks_like_key("gsk_" + "a" * 52)
+    assert not secrets.looks_like_key("AIza" + "x" * 35 + " extra")
+
+
+def test_new_key_formats_redacted():
+    from jarvis.core import logs, secrets
+    new, groq = "AQ.Ab8RN6" + "x" * 40, "gsk_" + "a" * 52
+    out = logs.redact(f"bad key {new} and {groq}")
+    assert new not in out and groq not in out
+    assert secrets.looks_secret(new) and secrets.looks_secret(groq)
 
 
 def test_html_400_is_bad_key():
