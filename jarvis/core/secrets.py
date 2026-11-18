@@ -7,13 +7,15 @@ USER = "gemini_api_key"
 
 def clean_key(raw: str) -> str:
     """Drop whitespace and control characters (Ctrl+V in a console types \\x16)."""
-    return "".join(c for c in (raw or "") if c.isprintable() and not c.isspace())
+    key = "".join(c for c in (raw or "") if c.isprintable() and not c.isspace())
+    return key.strip("\"'`\u201c\u201d\u2018\u2019")      # pasted with quotes around it
 
 
 def looks_like_key(key: str) -> bool:
-    # Old Gemini keys are "AIza...", new ones (late 2025+) are "AQ.Ab..." with a dot,
-    # so allow dots too. The "Test key" button is the real check.
-    return len(key) >= 30 and all(c.isascii() and (c.isalnum() or c in "-_.") for c in key)
+    # Only catches obvious junk (empty, a few stray characters, a pasted sentence with
+    # non-ASCII text). Providers change key formats (Gemini went "AIza..." -> "AQ.Ab..."),
+    # so don't guess the alphabet; the "Test key" button is the real check.
+    return 20 <= len(key) <= 512 and all(c.isascii() and c.isprintable() for c in key)
 
 
 def clipboard_text() -> str:

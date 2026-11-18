@@ -106,7 +106,8 @@ def test_key_cleaning():
     assert not secrets.looks_like_key("\x16\x16") and not secrets.looks_like_key("wrong")
     new = "AQ.Ab8RN6" + "x_-" * 15                    # new-style Gemini key has a dot
     assert secrets.looks_like_key(new) and secrets.looks_like_key("gsk_" + "a" * 52)
-    assert not secrets.looks_like_key("AIza" + "x" * 35 + " extra")
+    assert not secrets.looks_like_key("AIza" + "x" * 35 + "é")     # non-ASCII: pasted text, not a key
+    assert secrets.clean_key('"AQ.Ab' + "x" * 30 + '"') == "AQ.Ab" + "x" * 30
 
 
 def test_new_key_formats_redacted():

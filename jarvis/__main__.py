@@ -9,6 +9,7 @@ import logging
 import sys
 import threading
 import time
+from pathlib import Path
 
 from jarvis.core import config, instance, logs, secrets
 from jarvis.core.brain import Brain
@@ -292,6 +293,8 @@ def main():
     except Exception:
         pass
     logs.setup(get_key=secrets.get_api_key)
+    from jarvis import __version__
+    logging.getLogger("jarvis").info("Jarvis %s starting from %s", __version__, Path(__file__).resolve().parent.parent)
     gui = "--gui" in sys.argv
     if not instance.acquire():
         instance.signal_existing()          # the running Jarvis opens its settings window

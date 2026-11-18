@@ -292,7 +292,8 @@ class SettingsWindow:
             self.cfg.setdefault(k, v)
         self.h = _Hooks(hooks)
         self.win = ctk.CTkToplevel(root) if root is not None else ctk.CTk()
-        self.win.title("Jarvis settings")
+        from jarvis import __version__
+        self.win.title(f"Jarvis settings - version {__version__}")
         self.win.geometry("720x620")
         self.vars = {}
         self._meter_job = None
@@ -1183,8 +1184,10 @@ class SettingsWindow:
         key = secrets.clean_key(self.key_entry.get())
         if key:
             if not secrets.looks_like_key(key):
+                from jarvis import __version__
                 return self._say("The Gemini key box (General tab) has something that isn't "
-                                 "a key in it. Clear that box, or paste the key again, then Save.")
+                                 "a key in it. Clear that box, or paste the key again, then Save. "
+                                 f"(Jarvis {__version__})")
             secrets.set_api_key(key)
             self.key_entry.delete(0, "end")
             self.key_status.configure(text=mask_key(key))

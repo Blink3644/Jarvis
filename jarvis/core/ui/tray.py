@@ -54,9 +54,16 @@ class Tray:
         self._icon = None
         self._lock = threading.Lock()
 
+    @staticmethod
+    def _tip():
+        from jarvis import __version__
+        return f"Jarvis {__version__}"
+
     def _menu(self):
         import pystray
+        from jarvis import __version__
         return pystray.Menu(
+            pystray.MenuItem(f"Jarvis {__version__}", None, enabled=False),
             pystray.MenuItem("Open settings", lambda i, it: self.on_open_settings(), default=True),
             pystray.MenuItem("Mute mic", self._toggle_mute, checked=lambda it: self.muted),
             pystray.MenuItem("Quit", lambda i, it: self._quit()))
@@ -80,7 +87,7 @@ class Tray:
         with self._lock:
             if self._icon:
                 return
-            self._icon = pystray.Icon("Jarvis", make_icon(self._shown()), "Jarvis", self._menu())
+            self._icon = pystray.Icon("Jarvis", make_icon(self._shown()), self._tip(), self._menu())
         threading.Thread(target=self._icon.run, name="tray", daemon=True).start()
 
     def _shown(self):
