@@ -150,9 +150,11 @@ def start_voice(cfg, brain, ui):
     wake, fell_back = wakewords.load(cfg.get("wake_model", wakewords.DEFAULT))
     if fell_back:
         print("Your custom wake word couldn't be loaded, so I'm using \"Hey Jarvis\" for now.")
+    from .core.voice.live import make_session_factory
     va = VoiceAssistant(cfg, brain, registry, mic=Mic(cfg), wake=wake,
                         stt=Transcriber(cfg.get("stt_model", "base.en")), speaker=Speaker(cfg),
-                        vad=Vad(3), ui=ui, ptt=ptt, sounds=SOUNDS)
+                        vad=Vad(3), ui=ui, ptt=ptt, sounds=SOUNDS,
+                        live_factory=make_session_factory(cfg, registry, brain))
     va.start()
     log.info("voice ready in %.1fs", time.monotonic() - t)
     time.sleep(0.3)

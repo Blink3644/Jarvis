@@ -1,11 +1,20 @@
 # Jarvis — current state
 
-**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Next after confirmation: Stage A6.**
+**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. A6/A7 skipped for now at the user's request.**
 
-- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (210 pass).
+- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (219 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
   `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits`: main 20/day confirmed from a real 429 (quotaValue 20, 2026-11-17); lite 1000 still a guess.
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
+
+## Stage A8 (Gemini Live, experimental) — `jarvis/core/voice/live.py`, state LIVE in assistant.py
+- Off by default (`live_mode`). Settings > Voice: toggle, `live_model` (default `gemini-3.8-live`, GA per Google models page), `live_idle_seconds` (20).
+- **Live only works on API version `v1alpha`** (`live_api_version`): v1beta and v1 give HTTP 404 at the websocket handshake (checked 2026-11-17, all model names).
+- Smoke test 2026-11-17: connection + our config (system prompt, all tools, Google Search, transcriptions) accepted, then 1011 "You exceeded your current quota" -> this free key may have no Live quota for gemini-3.8-live. If so, try `gemini-3.1-flash-live-preview` in settings. NOT verified: real audio reply, latency, tool call by voice.
+- Flow: wake/PTT -> LIVE: mic frames streamed (16 kHz PCM), Gemini audio (24 kHz) -> speaker.play_now. Wake word is off in LIVE (only runs in IDLE). Gemini's own VAD handles turns and barge-in (`interrupted` -> speaker.interrupt). PTT press in LIVE = cut Jarvis off. "stop" in the input transcript ends the session. Idle `live_idle_seconds` -> close, back to wake word. Mute closes it.
+- Tools: same Registry; tool results sent with send_tool_response, `_media` images sent as realtime video frames. Confirmations: the input transcript is passed to registry.begin_turn at turn end / before a tool call, so a spoken "yes" works (if the transcript arrives late the model just asks again).
+- Fallback: error before Gemini answered -> notice ("I've hit the Live limit, so I'm using normal mode") and the audio heard so far is replayed into the normal endpointer -> whisper -> brain (any provider). Live paused 10 min after a quota error, 2 min after other errors. Error after an answer -> "Live mode dropped out".
+- Known limits: with speakers (no headphones) Gemini may hear itself and cut itself off; Live requests are not counted in the usage meter.
 
 ## Stage A5 (optional integrations) — `jarvis/pc/google_calendar.py`, `jarvis/pc/clickup.py`
 - Off by default. `Tool.available` (new) hides a tool from the AI and refuses calls unless on + connected, so friends never see them.

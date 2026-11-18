@@ -71,3 +71,13 @@ def test_move_item_for_provider_order():
     assert sw.move_item(["a", "b", "c"], 2, -1) == ["a", "c", "b"]
     assert sw.move_item(["a", "b"], 0, -1) == ["a", "b"]
     assert sw.move_item(["a", "b"], 1, 1) == ["a", "b"]
+
+
+def test_build_cfg_live_mode():
+    assert config.DEFAULTS["live_mode"] is False            # Live is off by default
+    cfg, errors = sw.build_cfg(dict(config.DEFAULTS), {"live_mode": True, "live_model": " ",
+                                                       "live_idle_seconds": "30"})
+    assert errors == [] and cfg["live_mode"] is True
+    assert cfg["live_model"] == "gemini-3.8-live" and cfg["live_idle_seconds"] == 30
+    _, errors = sw.build_cfg(dict(config.DEFAULTS), {"live_idle_seconds": "1"})
+    assert errors

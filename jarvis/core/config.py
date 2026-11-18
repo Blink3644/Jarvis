@@ -52,6 +52,10 @@ DEFAULTS = {
     "end_silence_ms": 800,
     "stop_word_enabled": True,        # say "stop" while Jarvis talks to interrupt
     "listen_sound": True,
+    # ---- Gemini Live voice mode (Stage A8, experimental) ----
+    "live_mode": False,               # off by default; normal mode is always the fallback
+    "live_model": "gemini-3.8-live",  # checked on Google's models page 2026-11-17
+    "live_idle_seconds": 20,          # close the Live session after this much quiet
     # ---- tray, settings window, on-screen panel (Stage A4) ----
     "theme": "hud",                   # hud | minimal
     "overlay_hide_s": 8,              # panel hides this long after a reply

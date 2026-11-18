@@ -110,7 +110,13 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
     for k in ("clickup_team_id", "clickup_list_id", "clickup_list_name"):
         if k in f:
             cfg[k] = str(f[k] or "").strip()
-    for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows",
+    if "live_model" in f:
+        cfg["live_model"] = str(f["live_model"] or "").strip() or "gemini-3.8-live"
+    if "live_idle_seconds" in f:
+        v = _num(f["live_idle_seconds"], "Live mode idle seconds", 5, 300, float, errors)
+        if v is not None:
+            cfg["live_idle_seconds"] = v
+    for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows", "live_mode",
               "calendar_enabled", "clickup_enabled"):
         if k in f:
             cfg[k] = bool(f[k])
@@ -565,6 +571,13 @@ class SettingsWindow:
         self._entry(p, "followup_seconds", c["followup_seconds"],
                     "Keep listening after a reply for this many seconds (0 = off)", width=80)
         self._check(p, "stop_word_enabled", c["stop_word_enabled"], 'Saying "stop" interrupts Jarvis')
+        self._label(p, "Live voice mode (experimental)", bold=True)
+        self._check(p, "live_mode", c.get("live_mode", False),
+                    "Live voice mode: talk with Gemini in real time (Google Gemini key only; "
+                    "if it fails, Jarvis uses normal mode). Headphones work best.")
+        self._entry(p, "live_model", c.get("live_model", "gemini-3.8-live"), "Live model name", width=220)
+        self._entry(p, "live_idle_seconds", c.get("live_idle_seconds", 20),
+                    "End the Live conversation after this many quiet seconds (saves quota)", width=80)
         self._label(p, "Voice (pick one, or type any edge-tts voice name)")
         v = self._var("tts_voice", c["tts_voice"])
         ctk.CTkComboBox(p, variable=v, values=VOICES, width=300).pack(anchor="w", padx=8)

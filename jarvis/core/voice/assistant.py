@@ -34,6 +34,7 @@ def level_db(audio) -> str:
 
 
 IDLE, LISTEN, PTT, BUSY, FOLLOWUP, MIC_LOST = "idle", "listen", "ptt", "busy", "followup", "mic_lost"
+LIVE = "live"            # Stage A8: a Gemini Live conversation is open
 
 # Whisper sometimes "hears" these in noise; never treat them as a command on their own.
 _HALLUCINATIONS = {"", "you", "thank you", "thanks for watching", "thank you for watching",
@@ -47,7 +48,7 @@ def _meaningful(text: str) -> bool:
 
 class VoiceAssistant:
     def __init__(self, cfg, brain, registry, *, mic, wake, stt, speaker, vad, ui, ptt=None,
-                 sounds=None, clock=time.monotonic):
+                 sounds=None, clock=time.monotonic, live_factory=None):
         self.cfg, self.brain, self.registry = cfg, brain, registry
         self.mic, self.wake, self.stt, self.speaker, self.vad = mic, wake, stt, speaker, vad
         self.ui, self.ptt, self.sounds, self.clock = ui, ptt, sounds, clock
@@ -73,6 +74,11 @@ class VoiceAssistant:
         self.wake_test_best = 0.0
         self.speaking = False
         self.wake_reset_pending = False
+        self.live_factory = live_factory   # fn(**callbacks) -> LiveSession, or None
+        self.live = None
+        self.live_source = ""
+        self.live_frames: list[np.ndarray] = []   # audio kept until Live answers (for the fallback)
+        self.live_blocked_until = 0.0
         speaker.on_speaking = self._on_speaking
 
     # ---------- lifecycle ----------
@@ -88,6 +94,8 @@ class VoiceAssistant:
         if self.ptt:
             self.ptt.stop()
         self.speaker.interrupt()
+        if self.live:
+            self.live.close()
         if self.thread:
             self.thread.join(timeout=2)
 
@@ -131,7 +139,9 @@ class VoiceAssistant:
                 self._mic_lost()
             return
         if self.muted:
-            if self.state != IDLE and self.state != BUSY:
+            if self.state == LIVE:
+                self._end_live()
+            elif self.state != IDLE and self.state != BUSY:
                 self._go_idle()
             return
         self.ring.append(frame)
@@ -151,6 +161,8 @@ class VoiceAssistant:
                 self._finish_listen()
         elif st == BUSY:
             self._busy_frame(frame)
+        elif st == LIVE:
+            self._live_frame(frame)
 
     def _event(self, ev):
         if ev == "ptt_down":
@@ -160,6 +172,9 @@ class VoiceAssistant:
                 self._say_now("I can't hear you. The microphone selected in settings isn't connected.")
                 return
             if self.state == PTT:
+                return
+            if self.state == LIVE:
+                self.speaker.interrupt()  # talk over Jarvis; the Live session keeps listening
                 return
             self._cancel_turn()           # pressing the key interrupts Jarvis
             self._start_listen("ptt")
@@ -187,6 +202,12 @@ class VoiceAssistant:
                 self._go_idle()
             else:
                 self._mic_lost()
+        elif isinstance(ev, tuple) and ev[0] == "live_closed":
+            self._live_closed(*ev[1:])
+        elif ev == "live_stop":
+            if self.state == LIVE:
+                log.info("'stop' heard in live mode")
+                self._end_live()
         elif ev == "stop_heard":
             if self.state == BUSY:
                 log.info("'stop' heard: interrupting")
@@ -230,9 +251,12 @@ class VoiceAssistant:
         sens = min(0.95, max(0.05, float(self.cfg.get("wake_sensitivity", 0.5))))
         return 1.0 - sens
 
-    def _start_listen(self, source):
+    def _start_listen(self, source, fallback=False):
+        if source in ("wake", "ptt") and not fallback and self.live_enabled():
+            self._start_live(source)
+            return
         self.source = source
-        self.buf = list(self.ring)[-3:] if source in ("wake", "ptt") else []
+        self.buf = list(self.ring)[-3:] if source in ("wake", "ptt") and not fallback else []
         max_ms = int(self.cfg.get("max_record_seconds", 15) * 1000)
         if source == "followup":
             start_ms = int(self.cfg.get("followup_seconds", 5) * 1000)
@@ -243,7 +267,7 @@ class VoiceAssistant:
             min_speech_ms=300 if source == "followup" else 200,
             end_silence_ms=int(self.cfg.get("end_silence_ms", 800))))
         self.vad.reset()
-        if source != "followup" and self.cfg.get("listen_sound", True) and self.sounds:
+        if source != "followup" and not fallback and self.cfg.get("listen_sound", True) and self.sounds:
             self.speaker.play_now(self.sounds["listen"])
         self._set({"wake": LISTEN, "ptt": PTT, "followup": FOLLOWUP}[source])
 
@@ -264,6 +288,115 @@ class VoiceAssistant:
             if self.source == "wake":
                 log.info("wake word heard but no command followed")
             self._go_idle()
+
+    # ---------- Stage A8: Gemini Live ----------
+    def live_enabled(self) -> bool:
+        return bool(self.cfg.get("live_mode", False) and self.live_factory
+                    and self.clock() >= self.live_blocked_until)
+
+    def _start_live(self, source):
+        self.live_source = source
+        self.live_frames = list(self.ring)[-3:]
+        if self.cfg.get("listen_sound", True) and self.sounds:
+            self.speaker.play_now(self.sounds["listen"])
+        holder = {}
+
+        def mine():
+            return self.live is holder.get("s")
+
+        def on_audio(pcm):
+            if mine():
+                self.speaker.play_now(pcm)
+
+        def on_user_text(chunk):
+            s = holder.get("s")
+            if not mine():
+                return
+            self.ui.user_text(chunk)
+            if self.cfg.get("stop_word_enabled", True) and is_stop_command(s.user_text):
+                self.events.put("live_stop")
+
+        def on_reply_text(chunk):
+            if mine():
+                self.ui.reply_text(chunk)
+
+        def on_turn_complete():
+            if mine():
+                self.ui.reply_text("", final=True)
+
+        def on_interrupted():
+            if mine():
+                self.speaker.interrupt()   # the user talked over Jarvis
+
+        def on_closed(err, replied):
+            self.events.put(("live_closed", holder.get("s"), err, replied))
+
+        s = self.live_factory(on_audio=on_audio, on_user_text=on_user_text,
+                              on_reply_text=on_reply_text, on_turn_complete=on_turn_complete,
+                              on_interrupted=on_interrupted, on_closed=on_closed)
+        holder["s"] = s
+        self.live = s
+        self._set(LIVE)
+        s.start()
+        for f in self.live_frames:
+            s.send_audio(f)
+
+    def _live_frame(self, frame):
+        s = self.live
+        if s is None:
+            self._go_idle()
+            return
+        s.send_audio(frame)
+        if not s.replied:
+            self.live_frames.append(frame)
+            keep = int(self.cfg.get("max_record_seconds", 15) * RATE / FRAME)
+            if len(self.live_frames) > keep:
+                self.live_frames = self.live_frames[-keep:]
+        else:
+            self.live_frames = []
+        idle = float(self.cfg.get("live_idle_seconds", 20))
+        if s.idle_for() > idle and not self.speaker.busy and not self.speaking:
+            log.info("live session idle for %.0fs: closing to save quota", idle)
+            self._end_live()
+
+    def _end_live(self):
+        s, self.live = self.live, None
+        if s is not None:
+            s.close()
+        self.live_frames = []
+        self.wake_resume_at = self.clock() + SELF_GUARD_S
+        self.wake.reset()
+        self._go_idle()
+
+    def _live_closed(self, session, err, replied):
+        if session is not self.live:
+            return                         # we already moved on (idle timeout, "stop", mute)
+        self.live = None
+        frames, self.live_frames = self.live_frames, []
+        if err is None:
+            self._end_live()
+            return
+        from .live import classify_live_error
+        kind = classify_live_error(err)
+        self.live_blocked_until = self.clock() + (600 if kind == "quota" else 120)
+        if replied:
+            self.ui.notice("Live mode dropped out. Say Hey Jarvis to carry on.")
+            self._end_live()
+            return
+        why = {"quota": "I've hit the Live limit", "key": "Live mode isn't allowed with this key"}.get(
+            kind, "I couldn't connect to Live mode")
+        self.ui.notice(f"{why}, so I'm using normal mode.")
+        if self.state != LIVE:
+            return
+        # Hand the audio heard so far to the normal pipeline, which keeps listening from here.
+        self._start_listen(self.live_source, fallback=True)
+        for f in frames:
+            if self.state == LISTEN:
+                self._listen_frame(f)
+            elif self.state == PTT:
+                self.buf.append(f)
+            else:
+                break
 
     def _go_idle(self):
         self.buf = []
