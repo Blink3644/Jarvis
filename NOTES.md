@@ -7,6 +7,15 @@
   `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits`: main 20/day confirmed from a real 429 (quotaValue 20, 2026-11-17); lite 1000 still a guess.
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
 
+## Handover (2026-11-18)
+- Next job: push Jarvis to GitHub. No remote yet, no `gh` CLI. User creates a PUBLIC repo `Jarvis` at github.com/new
+  (no README/.gitignore/license), pastes the URL; then `git remote add origin <url>` and `git push -u origin main`
+  (Git Credential Manager sign-in window: the user signs in). Then the user runs `make_zip.bat` and attaches
+  `dist\Jarvis-<ver>.zip` to a GitHub Release (steps at the bottom of README.md).
+- Waiting for the user's tests: "clip that" with real OBS, A5 checklist, A8 Live mode, custom wake word (don't ask).
+- A7 (updater) not started; needs the GitHub repo first.
+- Weekly usage cap 88% (was 85% at handover).
+
 ## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, waiting for the user's test with real OBS
 - Tool `clip_that`: OBS Replay Buffer via obs-websocket v5 (OBS 28+, port `obs_port` 4455, password in keyring
   `Jarvis/obs_password`). Protocol checked against obs-websocket protocol.md. No key presses (user chose OBS over
