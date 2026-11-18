@@ -9,6 +9,9 @@ import asyncio
 import logging
 import os
 import queue
+import re
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -33,6 +36,26 @@ def tone(freqs, ms=70, volume=0.18) -> np.ndarray:
     return (np.concatenate(parts) * 32767).astype(np.int16)
 
 
+# Run by _offline() in a child process: fresh engine each time, saves one WAV file.
+_SAPI_SCRIPT = r"""
+import sys, pyttsx3
+text, path = sys.argv[1], sys.argv[2]
+e = pyttsx3.init()
+for v in e.getProperty("voices"):
+    if "david" in v.name.lower() or "george" in v.name.lower():
+        e.setProperty("voice", v.id)
+e.setProperty("rate", 185)
+e.save_to_file(text, path)
+e.runAndWait()
+"""
+
+
+def has_words(text: str) -> bool:
+    """False for chunks with nothing to say (e.g. '```', '**', '---'); edge-tts
+    answers those with NoAudioReceived."""
+    return bool(re.search(r"[^\W_]", text or ""))
+
+
 SOUNDS = {"listen": tone([880, 1320]), "stop": tone([1320, 880])}
 
 
@@ -54,7 +77,6 @@ class Speaker:
         self.lock = threading.Lock()
         self.offline_until = 0.0
         self.first_audio_at = 0.0
-        self._sapi = None
         self._speaking = False
         threading.Thread(target=self._synth_loop, name="tts-synth", daemon=True).start()
         threading.Thread(target=self._play_loop, name="tts-play", daemon=True).start()
@@ -70,7 +92,7 @@ class Speaker:
     # ---------- public ----------
     def say(self, text: str):
         text = (text or "").strip()
-        if not text:
+        if not has_words(text):
             return
         with self.lock:
             self.pending += 1
@@ -127,14 +149,27 @@ class Speaker:
                 else:
                     self.play_q.put((gen, pcm))
 
+    EDGE_TRIES = 2          # online attempts per sentence before using the offline voice
+    OFFLINE_SECONDS = 30    # then retry the online voice after this long
+    OFFLINE_TIMEOUT = 20    # the offline voice may never block longer than this
+
     def synth(self, text: str) -> np.ndarray:
         if time.monotonic() >= self.offline_until:
-            try:
-                return decode(asyncio.run(self._edge(text)))
-            except Exception as e:
-                log.warning("online voice failed (%s: %s); using offline voice for a minute",
-                            type(e).__name__, e)
-                self.offline_until = time.monotonic() + 60
+            err = None
+            for attempt in range(self.EDGE_TRIES):
+                try:
+                    pcm = decode(asyncio.run(self._edge(text)))
+                    if self.offline_until:
+                        log.info("online voice is back")
+                        self.offline_until = 0.0
+                    return pcm
+                except Exception as e:
+                    err = e
+                    if attempt + 1 < self.EDGE_TRIES:
+                        time.sleep(0.3)
+            log.warning("online voice failed %d times (%s: %s) for %r; offline voice for %ds",
+                        self.EDGE_TRIES, type(err).__name__, err, text[:60], self.OFFLINE_SECONDS)
+            self.offline_until = time.monotonic() + self.OFFLINE_SECONDS
         return self._offline(text)
 
     async def _edge(self, text: str) -> bytes:
@@ -149,24 +184,29 @@ class Speaker:
             raise RuntimeError("no audio returned")
         return bytes(out)
 
+    def _offline_cmd(self, text: str, path: str) -> list:
+        return [sys.executable, "-c", _SAPI_SCRIPT, text, path]
+
     def _offline(self, text: str) -> np.ndarray:
-        if self._sapi is None:
-            import comtypes
-            import pyttsx3
-            try:
-                comtypes.CoInitialize()
-            except OSError:
-                pass
-            self._sapi = pyttsx3.init()
-            for v in self._sapi.getProperty("voices"):
-                if "david" in v.name.lower() or "george" in v.name.lower():   # a male voice
-                    self._sapi.setProperty("voice", v.id)
-            self._sapi.setProperty("rate", 185)
+        """Windows' built-in voice, run in a separate short-lived process.
+
+        pyttsx3's runAndWait() can block forever on a reused engine (seen in the log:
+        the second offline sentence never returned, so Jarvis stayed busy for good).
+        A child process with a timeout can always be killed, so it can't hang us.
+        """
         fd, path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
         try:
-            self._sapi.save_to_file(text, path)
-            self._sapi.runAndWait()
+            cmd = self._offline_cmd(text, path)
+            try:
+                subprocess.run(cmd, timeout=self.OFFLINE_TIMEOUT, capture_output=True,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            except subprocess.TimeoutExpired:
+                log.warning("offline voice timed out; skipping this sentence")
+                return np.zeros(0, dtype=np.int16)
+            if not os.path.getsize(path):
+                log.warning("offline voice produced no audio")
+                return np.zeros(0, dtype=np.int16)
             with open(path, "rb") as f:
                 return decode(f.read())
         finally:

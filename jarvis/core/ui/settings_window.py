@@ -99,6 +99,7 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
             errors.append(f"'{k.replace('_', ' ')}' can't be empty.")
     for k, allowed in (("personality", config.PERSONALITIES), ("history_mode", config.HISTORY_MODES),
                        ("reply_mode", config.REPLY_MODES), ("auto_look", tuple(AUTO_LOOK_LABELS)),
+                       ("stt_model", config.STT_MODELS),
                        ("startup_greeting", tuple(GREETING_LABELS)), ("theme", tuple(THEME_LABELS))):
         if k in f:
             if f[k] not in allowed:
@@ -433,6 +434,10 @@ class SettingsWindow:
         self._label(p, "Voice (pick one, or type any edge-tts voice name)")
         v = self._var("tts_voice", c["tts_voice"])
         ctk.CTkComboBox(p, variable=v, values=VOICES, width=300).pack(anchor="w", padx=8)
+        self._label(p, "Speech recognition model (small.en is more accurate, ~1 s slower; "
+                       "first use downloads ~480 MB; restart Jarvis after changing)")
+        v = self._var("stt_model", c.get("stt_model", "base.en"))
+        ctk.CTkOptionMenu(p, variable=v, values=list(config.STT_MODELS)).pack(anchor="w", padx=8)
 
     def _wake_picker(self, p):
         from ..voice import wakewords

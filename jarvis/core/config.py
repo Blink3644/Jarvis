@@ -31,7 +31,7 @@ DEFAULTS = {
     "wake_enabled": True,
     "wake_model": "hey_jarvis",
     "wake_sensitivity": 0.5,          # 0.1 (strict) .. 0.9 (very sensitive)
-    "stt_model": "base.en",           # faster-whisper model: tiny.en / base.en / small.en
+    "stt_model": "base.en",           # faster-whisper model: one of STT_MODELS
     "main_timeout_s": 10,
     "home_city": "",                  # for weather, e.g. "Leeds"
     "app_aliases": {},                # spoken name -> app name or path, e.g. {"browser": "Google Chrome"}
@@ -60,6 +60,7 @@ DEFAULTS = {
 PERSONALITIES = ("butler", "casual", "direct")
 HISTORY_MODES = ("session", "log", "remember")
 REPLY_MODES = ("spoken", "text", "both")
+STT_MODELS = ("base.en", "small.en")
 
 
 def _path():
