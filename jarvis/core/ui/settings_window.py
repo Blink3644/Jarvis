@@ -1,4 +1,5 @@
-"""Settings window (Stage A4): tabs for General, Voice, PC, Notes, Routines, Integrations, Minecraft, About.
+"""Settings window (Stage A4): a sidebar of pages (see PAGES) with a search box on top, and small "?"
+buttons that explain the confusing options (texts in HELP_TEXTS).
 
 Form logic (parsing/validation) is in plain functions at the top so it can be tested
 without a screen. The widgets are below.
@@ -6,7 +7,7 @@ without a screen. The widgets are below.
 `hooks` is a dict or an object with optional callables (missing = control disabled):
     test_key(key) -> (ok, message)
     test_wake() -> None               (app starts a 10 s test; call window.wake_result(text))
-    mic_level() -> float 0..1         (polled every 100 ms while the Voice tab is shown)
+    mic_level() -> float 0..1         (polled every 100 ms while the Voice page is shown)
     reopen_mic() -> None              (called after the mic choice is saved and changed)
     apply(cfg) -> None                (called after Save)
     clear_history() -> None
@@ -42,9 +43,60 @@ THEME_LABELS = {"hud": "HUD (glowing orb)", "minimal": "Minimal"}
 VOICES = ["en-GB-RyanNeural", "en-GB-ThomasNeural", "en-GB-SoniaNeural", "en-US-GuyNeural",
           "en-US-AriaNeural", "en-US-ChristopherNeural"]
 DEFAULT_DEVICE = "(Windows default)"
+ALL_GAMES = "All games"   # "What Jarvis knows": a fact that is not tied to one game
+
+# Sidebar pages, in order. Each has its own builder method (see SettingsWindow._build).
+PAGES = ["General", "AI & usage", "AI providers", "Voice", "PC", "Privacy & memory", "Notes", "Routines",
+         "Integrations", "About", "Minecraft"]
+PLACEHOLDER_PAGES = {"Minecraft"}       # not built yet: shown last and greyed out
+
+# Plain-English help behind the small "?" buttons. Edit the wording here.
+HELP_TEXTS = {
+    "auto_look": "Lets Jarvis take a screenshot to help answer you.\n\n"
+                 "- Only when asked: only when you say something like \"look at my screen\".\n"
+                 "- In games only: also by itself while a game is open in front.\n"
+                 "- Always: with every question. Your whole screen goes to your AI service each time.\n\n"
+                 "Windows in the \"never take a screenshot\" list are never captured.",
+    "smart_tools": "Jarvis has many skills (volume, apps, timers...). With this on, it tells the AI only about "
+                   "the skills that fit your question. That uses fewer free requests and is faster.\n\n"
+                   "If Jarvis ever says it can't do something it normally can, switch this off.",
+    "history_mode": "What Jarvis does with your conversations:\n\n"
+                    "- Session only: forgets everything when Jarvis closes. Most private.\n"
+                    "- Save a readable log: writes a text file on this PC for you to read. Jarvis doesn't "
+                    "use it again.\n"
+                    "- Remember recent conversations: Jarvis re-reads recent chats so it can follow up "
+                    "later. This sends more of your past words to your AI service.\n\n"
+                    "\"Clear history\" deletes what is saved.",
+    "learn_about_me": "When on, Jarvis notes lasting facts you tell it (your games, people, what you like) "
+                      "and uses them later. Only your own words are used, never screen or web text.\n\n"
+                      "You can see, change or delete every fact in the \"What Jarvis knows\" list below. "
+                      "Say \"off the record\" to keep one thing out.",
+    "wake_sensitivity": "How easily Jarvis hears its wake word.\n\n"
+                        "- Lower: Jarvis wakes up less often by mistake, but you may have to repeat yourself.\n"
+                        "- Higher: Jarvis hears you more easily, but may wake up from other voices or game sound.",
+    "live_mode": "An experimental way to talk: your voice goes straight to Google Gemini and it answers in "
+                 "real time, like a phone call. Needs a Google Gemini key. It uses more of your free "
+                 "requests and works best with headphones. If it fails, Jarvis goes back to normal mode.",
+    "stt_gpu": "Lets your graphics card turn your speech into text, using a bigger, more accurate model. "
+               "The first time downloads about 2 GB. Leave it off on a laptop or a weak graphics card. "
+               "Restart Jarvis after changing it.",
+    "virtual_mics": "Virtual inputs (like VB-Cable or Voicemeeter) are pretend microphones made by apps. "
+                    "Only pick one if it carries just your own voice. If it also carries game, music or "
+                    "Discord sound, Jarvis may hear itself or others and wake up by accident.",
+}
 
 
 # ---------------------------------------------------------------- pure logic
+def find_settings(index, query: str) -> list[tuple[str, str]]:
+    """Search the settings. index = [(page, label text), ...] in page order.
+    Returns the entries whose label holds every word of the query, ignoring case.
+    (The window also puts each page's name in the index, so "voice" finds the Voice page.)"""
+    words = (query or "").lower().split()
+    if not words:
+        return []
+    return [(page, text) for page, text in index if all(w in text.lower() for w in words)]
+
+
 def label_to_key(labels: dict, label: str, default=None):
     for k, v in labels.items():
         if v == label:
@@ -297,8 +349,13 @@ class SettingsWindow:
         self.win = ctk.CTkToplevel(root) if root is not None else ctk.CTk()
         from jarvis import __version__
         self.win.title(f"Jarvis settings - version {__version__}")
-        self.win.geometry("720x620")
+        self.win.geometry("900x620")
         self.vars = {}
+        self.search_index: list[tuple[str, str]] = []   # (page, label text), for find_settings
+        self._search_widgets: list = []                 # widget for each search_index entry (None = page name)
+        self._building = None                           # page being built, so labels land in the index
+        self._lit: list = []                            # (widget, old colour) highlighted by the search
+        self.page = None                                # page shown now
         self._meter_job = None
         self._on_voice_tab = False
         self.result = None
@@ -322,12 +379,39 @@ class SettingsWindow:
             kw["text_color"] = color
         lab = self.ctk.CTkLabel(parent, **kw)
         lab.pack(fill="x", padx=8, pady=(6, 0))
+        if not color:                    # coloured lines are notes/warnings, not settings: keep them out of search
+            self._index(text, lab)
         return lab
 
-    def _menu(self, parent, name, labels, current_key, caption):
+    def _index(self, text, widget):
+        """Remember a label for the search box (only while the pages are being built)."""
+        if self._building and str(text).strip():
+            self.search_index.append((self._building, str(text)))
+            self._search_widgets.append(widget)
+
+    def _row(self, parent):
+        row = self.ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=8)
+        return row
+
+    def _help(self, parent, key):
+        """A small "?" that shows HELP_TEXTS[key]."""
+        b = self.ctk.CTkButton(parent, text="?", width=26, height=24, corner_radius=12, fg_color="gray40",
+                               command=lambda: self._show_help(key))
+        b.pack(side="left", padx=6)
+        return b
+
+    def _show_help(self, key):
+        from tkinter import messagebox
+        messagebox.showinfo("What does this mean?", HELP_TEXTS[key], parent=self.win)
+
+    def _menu(self, parent, name, labels, current_key, caption, help=None):
         self._label(parent, caption)
         v = self._var(name, labels.get(current_key, list(labels.values())[0]))
-        self.ctk.CTkOptionMenu(parent, variable=v, values=list(labels.values())).pack(anchor="w", padx=8)
+        row = self._row(parent)
+        self.ctk.CTkOptionMenu(row, variable=v, values=list(labels.values())).pack(side="left")
+        if help:
+            self._help(row, help)
         return v
 
     def _entry(self, parent, name, value, caption, width=300):
@@ -337,29 +421,49 @@ class SettingsWindow:
         e.pack(anchor="w", padx=8)
         return e
 
-    def _check(self, parent, name, value, text):
+    def _check(self, parent, name, value, text, help=None):
         v = self._var(name, bool(value), "bool")
-        self.ctk.CTkCheckBox(parent, text=text, variable=v).pack(anchor="w", padx=8, pady=4)
+        row = self._row(parent)
+        box = self.ctk.CTkCheckBox(row, text=text, variable=v)
+        box.pack(side="left", pady=4)
+        if help:
+            self._help(row, help)
+        self._index(text, box)
         return v
 
     # ---- build
     def _build(self):
         ctk = self.ctk
-        self.tabs = ctk.CTkTabview(self.win, command=self._tab_changed)
-        self.tabs.pack(fill="both", expand=True, padx=8, pady=(8, 0))
-        for name in ("General", "AI providers", "Voice", "PC", "Notes", "Routines", "Integrations", "Minecraft", "About"):
-            self.tabs.add(name)
-        self._general(self.tabs.tab("General"))
-        self._providers_tab(self.tabs.tab("AI providers"))
-        self._voice(self.tabs.tab("Voice"))
-        self._pc(self.tabs.tab("PC"))
-        self._notes(self.tabs.tab("Notes"))
-        self._routines(self.tabs.tab("Routines"))
-        self._integrations(self.tabs.tab("Integrations"))
-        self._minecraft(self.tabs.tab("Minecraft"))
-        self._about(self.tabs.tab("About"))
         bar = ctk.CTkFrame(self.win, fg_color="transparent")
-        bar.pack(fill="x", padx=8, pady=8)
+        bar.pack(side="bottom", fill="x", padx=8, pady=8)
+        side = ctk.CTkFrame(self.win, width=190)
+        side.pack(side="left", fill="y", padx=(8, 0), pady=(8, 0))
+        self.search_var = ctk.StringVar()     # (a CTkEntry with a textvariable can't show placeholder text)
+        ctk.CTkLabel(side, text="Search settings", anchor="w", width=174).pack(padx=8, pady=(6, 0))
+        ctk.CTkEntry(side, textvariable=self.search_var, width=174).pack(padx=8, pady=(0, 2))
+        self.search_info = ctk.CTkLabel(side, text="", height=18, text_color="gray60")
+        self.search_info.pack(padx=8)
+        self.search_var.trace_add("write", lambda *_: self._search())
+        body = ctk.CTkFrame(self.win, fg_color="transparent")
+        body.pack(side="left", fill="both", expand=True, padx=8, pady=(8, 0))
+        builders = {"General": self._general, "AI & usage": self._ai_usage, "AI providers": self._providers_tab,
+                    "Voice": self._voice, "PC": self._pc, "Privacy & memory": self._privacy,
+                    "Notes": self._notes, "Routines": self._routines, "Integrations": self._integrations,
+                    "About": self._about, "Minecraft": self._minecraft}
+        self.pages, self.page_buttons = {}, {}
+        for name in PAGES:
+            grey = name in PLACEHOLDER_PAGES
+            self.page_buttons[name] = ctk.CTkButton(
+                side, text=name + (" (not built yet)" if grey else ""), anchor="w", width=174,
+                fg_color="transparent", text_color="gray55" if grey else ("gray10", "gray90"),
+                hover_color=("gray75", "gray30"), command=lambda n=name: self.show_page(n))
+            self.page_buttons[name].pack(padx=8, pady=1)
+            self.pages[name] = ctk.CTkFrame(body, fg_color="transparent")
+            self._building = name
+            self._index(name, None)                     # the page name itself is searchable
+            builders[name](self.pages[name])
+        self._building = None
+        self.show_page(PAGES[0])
         self.status = ctk.CTkLabel(bar, text="", anchor="w")
         self.status.pack(side="left", fill="x", expand=True)
         ctk.CTkButton(bar, text="Cancel", width=90, fg_color="gray40", command=self.close).pack(side="right", padx=4)
@@ -371,16 +475,28 @@ class SettingsWindow:
         return f
 
     def _general(self, tab):
-        ctk, c = self.ctk, self.cfg
+        c = self.cfg
         p = self._scroll(tab)
+        self._entry(p, "user_title", c["user_title"], "What Jarvis calls you (for example sir, or your name)", width=200)
+        self._menu(p, "personality", PERSONALITY_LABELS, c["personality"], "Personality")
+        self._menu(p, "reply_mode", REPLY_LABELS, c["reply_mode"], "How Jarvis replies")
+        self._menu(p, "startup_greeting", GREETING_LABELS, c["startup_greeting"], "Greeting at startup")
+        self._menu(p, "theme", THEME_LABELS, c["theme"], "Look of the on-screen panel")
+        self._check(p, "start_with_windows", c["start_with_windows"], "Start Jarvis when Windows starts")
+
+    def _privacy_note(self, p):
         self._label(p, "Privacy: your questions, relevant notes (never secret ones), Calendar/ClickUp details, "
-                       "and screenshots or PC audio when you ask, are sent to the AI services you add here "
+                       "and screenshots or PC audio when you ask, are sent to the AI services you add "
                        "(Google, OpenAI, Anthropic, etc.). Free tiers may use this data to improve their products.",
                     color="orange")
+
+    def _ai_usage(self, tab):
+        ctk, c = self.ctk, self.cfg
+        p = self._scroll(tab)
+        self._privacy_note(p)
         self._label(p, "Google Gemini API key", bold=True)
         self.key_status = self._label(p, mask_key(secrets.get_api_key()))
-        row = ctk.CTkFrame(p, fg_color="transparent")
-        row.pack(fill="x", padx=8)
+        row = self._row(p)
         self.key_entry = ctk.CTkEntry(row, show="*", width=300, placeholder_text="Paste a new key here to change it")
         self.key_entry.pack(side="left")
         ctk.CTkButton(row, text="Test key", width=90, command=self._test_key,
@@ -388,27 +504,36 @@ class SettingsWindow:
         self._entry(p, "model_main", c["model_main"], "Main model")
         self._entry(p, "model_fallback", c["model_fallback"], "Backup model (used when the main one runs out)")
         self._check(p, "smart_tools", c.get("smart_tools", True),
-                    "Send the AI only the tools that fit each question (uses fewer tokens; "
-                    "turn off if Jarvis says it can't do something it normally can)")
-        self._menu(p, "personality", PERSONALITY_LABELS, c["personality"], "Personality")
-        self._entry(p, "user_title", c["user_title"], "What Jarvis calls you (for example sir, or your name)", width=200)
-        self._menu(p, "reply_mode", REPLY_LABELS, c["reply_mode"], "How Jarvis replies")
-        self._menu(p, "history_mode", HISTORY_LABELS, c["history_mode"], "Conversation history")
-        ctk.CTkButton(p, text="Clear history", width=120, command=self._clear_history,
-                      state="normal" if self.h.get("clear_history") else "disabled").pack(anchor="w", padx=8, pady=4)
-        self._check(p, "learn_about_me", c.get("learn_about_me", False),
-                    "Learn about me: Jarvis picks up lasting facts from what you say (your games, people, "
-                    "likes) and uses them later. Only your own words are used, never screen or web text. "
-                    "Say \"what do you know about me?\" or \"forget that ...\". Say \"off the record\" to skip one.")
+                    "Smart tools: send the AI only the skills that fit each question", help="smart_tools")
         self._label(p, "Today's free requests (limits can be edited, Google changes them)", bold=True)
         self.usage_frame = ctk.CTkFrame(p, fg_color="transparent")
         self.usage_frame.pack(fill="x", padx=8)
         self._fill_usage()
-        self._check(p, "start_with_windows", c["start_with_windows"], "Start Jarvis when Windows starts")
-        self._menu(p, "startup_greeting", GREETING_LABELS, c["startup_greeting"], "Greeting at startup")
-        self._menu(p, "theme", THEME_LABELS, c["theme"], "Look of the on-screen panel")
+        self._label(p, "More AI services (OpenAI, Anthropic, Groq...) are on the AI providers page.", color="gray60")
 
-    # ---------- AI providers tab ----------
+    def _privacy(self, tab):
+        ctk, c = self.ctk, self.cfg
+        p = self._scroll(tab)
+        self._privacy_note(p)
+        self._menu(p, "history_mode", HISTORY_LABELS, c["history_mode"], "Conversation history", help="history_mode")
+        ctk.CTkButton(p, text="Clear history", width=120, command=self._clear_history,
+                      state="normal" if self.h.get("clear_history") else "disabled").pack(anchor="w", padx=8, pady=4)
+        self._index("Clear history", None)
+        self._menu(p, "auto_look", AUTO_LOOK_LABELS, c["auto_look"], "Let Jarvis look at your screen", help="auto_look")
+        self._label(p, 'Warning: "Always" sends whatever is on your screen to your AI service with every question.',
+                    color="orange")
+        self._label(p, "Never take a screenshot when the window name contains (separated by commas)")
+        self.never_box = ctk.CTkTextbox(p, height=60)
+        self.never_box.pack(fill="x", padx=8)
+        self.never_box.insert("1.0", ", ".join(c["never_screenshot"]))
+        self._label(p, "Learn about me", bold=True)
+        self._check(p, "learn_about_me", c.get("learn_about_me", False),
+                    "Learn about me: remember lasting facts from what you say", help="learn_about_me")
+        self._label(p, "Only your own words are used, never screen or web text. Say \"what do you know about "
+                       "me?\" or \"forget that ...\". Say \"off the record\" to skip one.", color="gray60")
+        self._knows(p)
+
+    # ---------- AI providers page ----------
     def _providers_tab(self, tab):
         ctk = self.ctk
         self.prov_list = copy.deepcopy(self.cfg.get("providers") or [dict(providers.GEMINI_ENTRY)])
@@ -416,7 +541,7 @@ class SettingsWindow:
         self.prov_rows: list[dict] = []
         self._label(tab, "Jarvis asks the top provider first. When it runs out or fails, it moves down the "
                          "list, tells you once, and goes back up when the top one works again. Keys are kept "
-                         "in Windows Credential Manager. The Gemini key is on the General tab.", wrap=640)
+                         "in Windows Credential Manager. The Gemini key is on the AI & usage page.", wrap=640)
         add = ctk.CTkFrame(tab, fg_color="transparent")
         add.pack(fill="x", padx=8, pady=4)
         names = {p["name"]: k for k, p in providers.PRESETS.items()}
@@ -485,7 +610,7 @@ class SettingsWindow:
                 row["status"] = ctk.CTkLabel(box, text="", wraplength=600, justify="left")
                 row["status"].pack(anchor="w", padx=6)
             else:
-                ctk.CTkLabel(top, text="Set its key and models on the General tab.").pack(side="left", padx=8)
+                ctk.CTkLabel(top, text="Set its key and models on the AI & usage page.").pack(side="left", padx=8)
             self.prov_rows.append(row)
 
     def _prov_add(self, preset):
@@ -563,8 +688,11 @@ class SettingsWindow:
             def toggle():
                 extra = self.virtual_inputs if show.get() else []
                 mic_menu.configure(values=[DEFAULT_DEVICE, *ins, *extra])
-            ctk.CTkCheckBox(p, text="Show virtual inputs (advanced)", variable=show,
-                            command=toggle).pack(anchor="w", padx=8, pady=(4, 0))
+            row = self._row(p)
+            box = ctk.CTkCheckBox(row, text="Show virtual inputs (advanced)", variable=show, command=toggle)
+            box.pack(side="left", pady=(4, 0))
+            self._help(row, "virtual_mics")
+            self._index("Show virtual inputs (advanced)", box)
             self._label(p, "Only pick a virtual input (like VB-Cable) if it carries just your own voice. "
                            "If it also carries game, music or Discord sound, Jarvis may wake itself up.",
                         color="gray")
@@ -584,7 +712,9 @@ class SettingsWindow:
         self._wake_picker(p)
         self._label(p, "Wake word sensitivity (low = strict, high = picks up more)")
         v = self._var("wake_sensitivity", float(c["wake_sensitivity"]), "float")
-        ctk.CTkSlider(p, from_=0.1, to=0.9, variable=v, width=300).pack(anchor="w", padx=8)
+        row = self._row(p)
+        ctk.CTkSlider(row, from_=0.1, to=0.9, variable=v, width=300).pack(side="left")
+        self._help(row, "wake_sensitivity")
         self._check(p, "ptt_enabled", c["ptt_enabled"], "Push-to-talk (hold a key to speak)")
         self._entry(p, "ptt_key", c["ptt_key"], "Push-to-talk key (for example ctrl_r, alt_r, f8)", width=150)
         self._entry(p, "followup_seconds", c["followup_seconds"],
@@ -592,8 +722,8 @@ class SettingsWindow:
         self._check(p, "stop_word_enabled", c["stop_word_enabled"], 'Saying "stop" interrupts Jarvis')
         self._label(p, "Live voice mode (experimental)", bold=True)
         self._check(p, "live_mode", c.get("live_mode", False),
-                    "Live voice mode: talk with Gemini in real time (Google Gemini key only; "
-                    "if it fails, Jarvis uses normal mode). Headphones work best.")
+                    "Live voice mode: talk with Gemini in real time (Google Gemini key only)",
+                    help="live_mode")
         self._entry(p, "live_model", c.get("live_model", "gemini-3.8-live"), "Live model name", width=220)
         self._entry(p, "live_idle_seconds", c.get("live_idle_seconds", 20),
                     "End the Live conversation after this many quiet seconds (saves quota)", width=80)
@@ -605,8 +735,8 @@ class SettingsWindow:
         v = self._var("stt_model", c.get("stt_model", "base.en"))
         ctk.CTkOptionMenu(p, variable=v, values=list(config.STT_MODELS)).pack(anchor="w", padx=8)
         self._check(p, "stt_gpu", c.get("stt_gpu", False),
-                    "Use graphics card for speech (more accurate large model; AMD, Intel or NVIDIA; "
-                    "first use downloads ~2 GB in the background; restart Jarvis after changing)")
+                    "Use graphics card for speech (GPU; AMD, Intel or NVIDIA; restart Jarvis after changing)",
+                    help="stt_gpu")
         self._check(p, "keep_debug_clips", c.get("keep_debug_clips", False),
                     "Keep my last 20 voice commands for tuning (saved on this PC only, "
                     "in the Jarvis data folder, debug_clips)")
@@ -697,13 +827,8 @@ class SettingsWindow:
         self.games_box = ctk.CTkTextbox(p, height=60)
         self.games_box.pack(fill="x", padx=8)
         self.games_box.insert("1.0", ", ".join(c["game_list"]))
-        self._menu(p, "auto_look", AUTO_LOOK_LABELS, c["auto_look"], "Let Jarvis look at your screen")
-        self._label(p, 'Warning: "Always" sends whatever is on your screen to your AI service with every question.',
-                    color="orange")
-        self._label(p, "Never take a screenshot when the window name contains (separated by commas)")
-        self.never_box = ctk.CTkTextbox(p, height=60)
-        self.never_box.pack(fill="x", padx=8)
-        self.never_box.insert("1.0", ", ".join(c["never_screenshot"]))
+        self._label(p, "Screenshots (auto-look) and the never-screenshot list are on the Privacy & memory page.",
+                    color="gray60")
         self._entry(p, "listen_default_s", c["listen_default_s"], "Listening to PC audio: default seconds", width=80)
         self._entry(p, "listen_max_s", c["listen_max_s"], "Listening to PC audio: longest allowed seconds", width=80)
 
@@ -748,6 +873,84 @@ class SettingsWindow:
         from jarvis.pc import notes
         notes.delete_note(nid)
         self._fill_notes()
+
+    # ---- what Jarvis knows (facts from "Learn about me"; pc code is reached only through self.h)
+    def _knows(self, tab):
+        """The "What Jarvis knows" list, at the bottom of the Privacy & memory page (which scrolls)."""
+        ctk = self.ctk
+        self._label(tab, "What Jarvis knows", bold=True)
+        self.knows_state = ctk.CTkLabel(tab, text="", anchor="w", justify="left", wraplength=620)
+        self.knows_state.pack(fill="x", padx=8, pady=(6, 0))
+        learn = self.vars.get("learn_about_me")
+        if learn is not None:            # follows the Learn about me tick box, before Save too
+            learn.trace_add("write", lambda *_: self._knows_state_text())
+        self._knows_state_text()
+        self.knows_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        self.knows_frame.pack(fill="x", padx=8, pady=4)
+        self.knows_forget_btn = ctk.CTkButton(tab, text="Forget everything", width=140, fg_color="firebrick",
+                                              command=self._knows_forget_all)
+        self.knows_forget_btn.pack(anchor="w", padx=8, pady=(0, 4))
+        self._fill_knows()
+
+    def _knows_state_text(self):
+        learn = self.vars.get("learn_about_me")
+        on = bool(learn.get()) if learn is not None else bool(self.cfg.get("learn_about_me", False))
+        self.knows_state.configure(text=(
+            "Learn about me is ON: Jarvis picks up lasting facts from what you say." if on else
+            "Learn about me is OFF: Jarvis isn't learning anything new.")
+            + " Switch it on or off with the Learn about me tick box above. Changes in this list are "
+              "saved straight away.")
+
+    def _fill_knows(self):
+        ctk = self.ctk
+        for w in self.knows_frame.winfo_children():
+            w.destroy()
+        facts = self.h.call("profile_facts", default=None)
+        if facts is None:
+            ctk.CTkLabel(self.knows_frame, text="This list is not available.").pack(anchor="w")
+            self.knows_forget_btn.configure(state="disabled")
+            return
+        self.knows_forget_btn.configure(state="normal" if facts else "disabled")
+        if not facts:
+            ctk.CTkLabel(self.knows_frame, text="Jarvis hasn't learned anything about you yet.").pack(anchor="w")
+        # "All games" facts first, then each game's facts together; the game box can be typed in
+        games = [ALL_GAMES] + sorted({f["game"] for f in facts if f.get("game")}, key=str.lower)
+        for f in sorted(facts, key=lambda f: (str(f.get("game") or "").lower(), int(f.get("id", 0)))):
+            row = ctk.CTkFrame(self.knows_frame)
+            row.pack(fill="x", pady=2)
+            v = ctk.StringVar(value=f["text"])
+            ctk.CTkEntry(row, textvariable=v).pack(side="left", fill="x", expand=True, padx=4)
+            g = ctk.StringVar(value=f.get("game") or ALL_GAMES)
+            ctk.CTkComboBox(row, values=games, variable=g, width=130).pack(side="left", padx=2)
+            ctk.CTkLabel(row, text=str(f.get("learned", ""))[:10], width=80).pack(side="left")
+            ctk.CTkButton(row, text="Save", width=56,
+                          command=lambda i=f["id"], v=v, g=g: self._knows_edit(i, v, g)).pack(side="left", padx=2)
+            ctk.CTkButton(row, text="Delete", width=56, fg_color="firebrick",
+                          command=lambda i=f["id"]: self._knows_delete(i)).pack(side="left", padx=2)
+
+    def _knows_edit(self, fid, var, game_var=None):
+        game = () if game_var is None else (
+            "" if game_var.get().strip().lower() in ("", ALL_GAMES.lower()) else game_var.get().strip(),)
+        problem = self.h.call("profile_update", fid, var.get(), *game, default="Could not save that.")
+        self._say(problem or "Saved.")
+        self._fill_knows()
+
+    def _knows_delete(self, fid):
+        self.h.call("profile_delete", fid)
+        self._say("Deleted.")
+        self._fill_knows()
+
+    def _knows_forget_all(self):
+        if not self._ask_yes("Forget everything?", "Are you sure? Jarvis will forget everything it has learned "
+                                                   "about you. This can't be undone."):
+            return
+        n = self.h.call("profile_forget_all", default=0) or 0
+        self._say(f"Forgot {n} thing{'s' if n != 1 else ''}.")
+        self._fill_knows()
+
+    def _ask_yes(self, title, text):
+        from tkinter import messagebox
+        return messagebox.askyesno(title, text, parent=self.win)
 
     # ---- routines
     def _routines(self, tab):
@@ -1247,10 +1450,49 @@ class SettingsWindow:
         self.h.call("clear_history")
         self._say("History cleared.")
 
-    def _tab_changed(self):
-        self._on_voice_tab = self.tabs.get() == "Voice"
+    def show_page(self, name):
+        """Show one sidebar page and mark its button."""
+        if self.page and self.page != name:
+            self.pages[self.page].pack_forget()
+        if self.page != name:
+            self.pages[name].pack(fill="both", expand=True)
+        self.page = name
+        for n, b in self.page_buttons.items():
+            b.configure(fg_color=("gray75", "gray25") if n == name else "transparent")
+        self._on_voice_tab = name == "Voice"
         if self._on_voice_tab and self._meter_job is None:
             self._poll_meter()
+
+    def _search(self):
+        """Search box: dim pages without a match, light up matching labels, jump to the first match."""
+        for w, color in self._lit:
+            try:
+                w.configure(text_color=color)
+            except Exception:
+                pass
+        self._lit = []
+        query = self.search_var.get()
+        hits = find_settings(self.search_index, query)
+        pages = {page for page, _ in hits}
+        for n, b in self.page_buttons.items():
+            grey = n in PLACEHOLDER_PAGES or (query.strip() and n not in pages)
+            b.configure(text_color="gray55" if grey else ("gray10", "gray90"))
+        if not query.strip():
+            return self.search_info.configure(text="")
+        self.search_info.configure(text=f"{len(hits)} match{'es' if len(hits) != 1 else ''}"
+                                        if hits else "Nothing found")
+        if not hits:
+            return
+        hit_set = set(hits)
+        for entry, w in zip(self.search_index, self._search_widgets):
+            if w is not None and entry in hit_set:
+                try:
+                    self._lit.append((w, w.cget("text_color")))
+                    w.configure(text_color="#3b9cff")
+                except Exception:
+                    pass
+        if self.page not in pages:
+            self.show_page(hits[0][0])
 
     def _poll_meter(self):
         if not self._on_voice_tab:
@@ -1298,7 +1540,7 @@ class SettingsWindow:
         if key:
             if not secrets.looks_like_key(key):
                 from jarvis import __version__
-                return self._say("The Gemini key box (General tab) has something that isn't "
+                return self._say("The Gemini key box (AI & usage page) has something that isn't "
                                  "a key in it. Clear that box, or paste the key again, then Save. "
                                  f"(Jarvis {__version__})")
             secrets.set_api_key(key)
