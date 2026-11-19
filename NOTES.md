@@ -18,7 +18,8 @@
   "Run without asking" / provider "Understands:" / Minecraft "not built yet"); limit and server errors are
   provider-neutral when non-Gemini providers are set up ("All my AI providers are out of requests..."); the
   system prompt now asks for answer-first replies, spoken-style numbers, no URLs read aloud and short action
-  confirmations (`jarvis/core/personality.py`). Still to polish: README/first run, overlay/tray, dead code.
+  confirmations (`jarvis/core/personality.py`). New `spotify_volume` tool (Spotify Web API `/me/player/volume`,
+  Premium): "music/Spotify volume" goes to it, PC volume tools say so; topic `music_volume`. Still to polish: README/first run, overlay/tray, dead code.
 
 ## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, confirmed with real OBS 2026-11-18
 - Tool `clip_that`: OBS Replay Buffer via obs-websocket v5 (OBS 28+, port `obs_port` 4455, password in keyring

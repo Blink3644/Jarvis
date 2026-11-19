@@ -72,7 +72,7 @@ def test_real_tool_flags():
                     "spotify_now_playing"}
     for n in ("copy_to_clipboard", "remember_note", "create_routine", "run_routine", "open_app",
               "media_control", "set_volume", "set_timer", "add_calendar_event", "create_clickup_task",
-              "spotify_play", "spotify_queue", "spotify_like_current", "spotify_shuffle"):
+              "spotify_play", "spotify_queue", "spotify_like_current", "spotify_shuffle", "spotify_volume"):
         assert r.tools[n].side_effect, n
     # No tool may change safety settings by voice (only the settings window can).
     banned = ("confirm", "skip_confirm", "auto_look", "never_screenshot", "allowed_virtual_mics",
