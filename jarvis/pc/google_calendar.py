@@ -297,6 +297,52 @@ def register(reg: Registry, cfg: dict) -> None:
     ))
 
 
+# ---------- heads-up before events (opt-in: cfg["calendar_headsup"]) ----------
+def safe_title(text, limit: int = 80) -> str:
+    """Event titles are data: one plain line, no control characters, short. Only ever spoken."""
+    t = "".join(ch if ch.isprintable() else " " for ch in str(text or ""))
+    t = " ".join(t.split()).replace('"', "'")
+    return (t[:limit - 3] + "...") if len(t) > limit else (t or "an event")
+
+
+def upcoming(now: dt.datetime, hours: int = 2, http=None, token_fn=None) -> list[dict]:
+    """Timed events starting in the next `hours`: [{'key', 'title', 'start' (aware datetime)}]."""
+    http = http or httpx
+    token_fn = token_fn or _access_token
+    now = now.astimezone() if now.tzinfo is None else now
+    r = http.get(API, headers={"Authorization": f"Bearer {token_fn()}"}, timeout=TIMEOUT, params={
+        "timeMin": now.isoformat(), "timeMax": (now + dt.timedelta(hours=hours)).isoformat(),
+        "singleEvents": "true", "orderBy": "startTime", "maxResults": MAX_EVENTS})
+    r.raise_for_status()
+    out = []
+    for ev in r.json().get("items", []):
+        s = ev.get("start", {})
+        if ev.get("status") == "cancelled" or "dateTime" not in s:     # skip all-day events
+            continue
+        try:
+            start = dt.datetime.fromisoformat(s["dateTime"].replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        out.append({"key": f"{ev.get('id', '')}|{s['dateTime']}", "title": safe_title(ev.get("summary")),
+                    "start": start})
+    return out
+
+
+def due_headsups(events, now: dt.datetime, lead_minutes: int, seen: set) -> list[tuple[dict, int]]:
+    """Events starting within lead_minutes that haven't been announced: [(event, minutes_left)]."""
+    now = now.astimezone() if now.tzinfo is None else now
+    out = []
+    for ev in events:
+        secs = (ev["start"] - now).total_seconds()
+        if 0 < secs <= lead_minutes * 60 and ev["key"] not in seen:
+            out.append((ev, max(1, -int(-secs // 60))))     # round up to whole minutes
+    return out
+
+
+def headsup_text(ev: dict, minutes: int) -> str:
+    return f'Heads up: "{ev["title"]}" starts in {minutes} minute{"s" if minutes != 1 else ""}.'
+
+
 def brief_line(cfg) -> str:
     """For the 'Daily brief' greeting; '' when Calendar isn't set up."""
     if not available(cfg):

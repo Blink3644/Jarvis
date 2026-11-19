@@ -66,9 +66,13 @@ DEFAULTS = {
     "overlay_pos": None,              # [x, y] once the user has moved it
     "start_with_windows": False,
     "startup_greeting": "simple",     # off | simple | brief
+    "morning_brief": False,           # opt-in: say the Daily brief at morning_brief_time each day (pc/briefings.py)
+    "morning_brief_time": "08:00",
     "spoken_sentence_limit": 3,
     # ---- optional integrations (Stage A5), off by default; secrets live in keyring ----
     "calendar_enabled": False,
+    "calendar_headsup": False,        # opt-in: say "Heads up" before events (titles are data only)
+    "calendar_headsup_minutes": 10,
     "clickup_enabled": False,
     "clickup_team_id": "",
     "clickup_list_id": "",            # default list for new tasks

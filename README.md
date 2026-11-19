@@ -83,6 +83,8 @@ It closes Jarvis, swaps in the new files and starts Jarvis again. Your settings,
 | "Hey Jarvis, play my Gym playlist" / "play some Daft Punk" | Plays it on Spotify (needs Spotify Premium, connected in Settings > Integrations). Also: "queue ...", "like this song", "what's playing?", shuffle, repeat |
 | "Set the volume to 30" / "next song" | Volume and media control |
 | "Set a timer for 10 minutes" | Speaks when the timer is done |
+| "Remind me at 6 to stretch" / "remind me in 20 minutes to check the oven" | Jarvis says it at that time. Reminders are saved, so they survive a restart (if Jarvis was off, it tells you what you missed). "Cancel the stretch reminder" removes one |
+| (nothing: Jarvis speaks first) | Turn on **Morning brief** (Settings → General) to hear the Daily brief at a set time each day, and **Heads-up** (Settings → Integrations, needs Google Calendar) to hear "Heads up: Standup starts in 10 minutes" |
 | "How do I beat this boss?" (in a game) | Looks at the game window and answers |
 | "Listen to this, what song is it?" | Records your PC's sound for 15 s and answers |
 | "Remember my locker code is 1234" | Saves a note on your PC. "What did I ask you to remember?" reads them back |

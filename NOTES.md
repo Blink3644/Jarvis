@@ -52,6 +52,22 @@
   Game Bar/NVIDIA hotkeys, which would break the no-keystrokes rule). Buffer off -> Jarvis starts it and says so.
   Settings > Integrations > OBS: port, password, Test OBS. "clip that" skips auto-look.
 
+## Proactive briefings (2026-11-19) — `jarvis/pc/briefings.py`, `jarvis/pc/timers.py`, `tests/test_briefings.py`
+- Reminders: tool `set_reminder(text, when)`; `timers.parse_when` reads "in 20 minutes", "in half an hour", "at 6"
+  (next 6:00 or 18:00), "6:30 pm", "tomorrow at 9" (= 9 am). Saved to `%APPDATA%/Jarvis/reminders.json` (max 50);
+  timers and alarms stay in memory. A reminder fired over 2 min late (Jarvis was off) says "While I was off...".
+  `cancel_timer` and `list_timers` cover reminders too.
+- `briefings.Briefings`: a daemon thread that ticks every 30 s and does nothing until a setting is on. Reads `cfg`
+  live (the settings window updates it in place). `tick()` is what the tests drive.
+- Calendar heads-up (`calendar_headsup`, `calendar_headsup_minutes` 1-120, default 10): needs `calendar_enabled` and
+  a connected calendar; asks Google every 5 min (`google_calendar.upcoming`), timed events only, once per event.
+  Titles go through `safe_title` (one line, no control chars, 80 chars) and are only spoken/shown via
+  `registry.announce`, never sent to the AI.
+- Morning brief (`morning_brief`, `morning_brief_time` "HH:MM"): reuses the startup Daily brief text
+  (`ui/app.brief_sources` + `greeting.daily_brief`); once a day, within an hour after the time; last date in
+  `%APPDATA%/Jarvis/briefings.json` so a restart doesn't repeat it.
+- Not yet checked on a real PC: spoken timing, the two settings rows, heads-up with a real Google Calendar.
+
 ## Safety rules (2026-11-17) — `jarvis/core/registry.py`, `tests/test_safety.py`
 - `Tool.side_effect` (default True), `Tool.brings_data`, `Tool.gate`. `registry.tainted` is set when a data tool runs or an auto-look screenshot is attached; then side-effect tools need confirm_action in a later turn.
 - Secret notes: `jarvis/core/secrets.py` `looks_secret` (lenient: 'password', 'PIN', card/key shapes) -> note gets `secret`+`title`; AI sees the title only (`notes.shown_text`); settings list shows 'SECRET (local only)'; heard-text log lines are redacted. The 'Save a readable log' history file still holds what was said (user's own choice). Privacy line is at the top of the Brain/key settings tab. Not done: search-grounding taint isn't detected.
@@ -105,8 +121,8 @@
   Match tiers: exact > whole word (shortest wins) > close spelling (same first letter, >=85). Else candidates.
   close_app destructive (WM_CLOSE, terminate after a wait; protected system processes refused).
 - media.py (pycaw `GetSpeakers().EndpointVolume`, CoInitialize per thread), system.py (shutdown/restart fixed args, sleep
-  destructive), weather.py (Open-Meteo; httpx missing -> falls back to httpx2 from google-genai), timers.py (in memory,
-  `register` returns the manager; announce via registry.announce), notes.py (notes.json, scopes, keyword context),
+  destructive), weather.py (Open-Meteo; httpx missing -> falls back to httpx2 from google-genai), timers.py (timers/alarms in
+  memory, reminders saved; see Proactive briefings; `register` returns the manager; announce via registry.announce), notes.py (notes.json, scopes, keyword context),
   routines.py (create/run/delete confirmed; steps validated, no listen/look/routine tools inside routines;
   routine names+steps go into the prompt context so "start my music" runs routine "start music" (verified live).
   after an open_app step it waits for the app window (max 20 s) + 2 s before the next step; `wait` tool for explicit pauses).
