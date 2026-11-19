@@ -127,3 +127,8 @@
 - API formats taken from the providers' long-standing public docs; NOT verified live this session
   (no keys, budget). First real test per provider = the user's checklist.
 - Not done: streaming for non-Gemini providers; Test key doesn't fill the models field automatically.
+
+## Team setup (2026-11-18)
+- Shared rules: `CLAUDE.md` (developers use branches + PRs; only the owner bumps versions and releases). Owner-only rules: `CLAUDE.local.md` (gitignored, owner's PC). Human guide for developers: `CONTRIBUTING.md`.
+- Zip friends get `packaging/CLAUDE_zip.md` as `Jarvis/CLAUDE.md` (added by `make_zip.bat`); CONTRIBUTING and packaging/ are export-ignored.
+

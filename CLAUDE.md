@@ -6,9 +6,11 @@ A Windows desktop voice assistant called **Jarvis**. It has two parts:
 - **Part A: PC Jarvis (TOP PRIORITY).** A general voice assistant that controls the PC and answers questions.
 - **Part B: Minecraft Mode.** An add-on module that makes Jarvis an advanced modpack guide. It understands the player's game state and adapts to any modpack **without being a mod** and without depending on any mod loader.
 
-**Build all of Part A first.** Do not start Part B until Part A works end-to-end on the user's PC and the user confirms it.
+**Build all of Part A first.** Do not start Part B until Part A works end-to-end and a developer has confirmed it on a real PC.
 
-The release is a zip for friends, Windows only. The user is not a programmer, so explain any manual steps in plain language.
+The release is a zip for friends, Windows only. The code lives at github.com/Blink3644/Jarvis.
+
+**Who you're working with.** This file is shared by everyone who works on Jarvis: the owner (Blink3644) and a few friends added as developers on GitHub. "The developer" below means whoever you're helping right now. Assume they are not a programmer: keep explanations short and plain, and give exact click/type steps. The owner keeps extra personal rules in `CLAUDE.local.md` (on the owner's PC only, not in git). If that file is loaded, follow it as well.
 
 ---
 
@@ -27,12 +29,29 @@ The release is a zip for friends, Windows only. The user is not a programmer, so
 ---
 
 ## Ground rules for Claude Code
-1. **Git checkpoints.** Run `git init` at the start. Commit after every working stage, and before any risky change, with a clear message (e.g. `Stage A2: voice working`). If a change breaks something and the fix isn't quick, roll back to the last good commit instead of piling on patches.
-2. **One stage at a time, in the order written.** The user wants each stage fully finished before the next. Don't jump ahead to build a quick minimal version first. At the end of each stage, give the user a short test checklist (the exact words to say and the expected result). Wait for their confirmation before starting the next stage.
+1. **Git checkpoints.** Commit after every working step, and before any risky change, with a clear message (e.g. `Stage A2: voice working`). If a change breaks something and the fix isn't quick, roll back to the last good commit instead of piling on patches. (No `.git` folder because the code came from a zip? Run `git init` and commit everything first.)
+2. **One stage or feature at a time.** Finish each one fully before starting the next. Don't jump ahead to build a quick minimal version first. At the end, give the developer a short test checklist (the exact words to say and the expected result) and wait for their confirmation before starting something new.
 3. **Test what you can yourself.** Run code, unit tests, and scripts on this PC. Ask the user only for things you can't do, like speaking into the mic, listening to output, or launching Minecraft.
 4. **Verify, don't guess.** Check current library APIs, Gemini model names, and file formats (map mods, quest files) against real docs or real files before coding against them.
 5. **Plain language.** The user is not a programmer, so keep explanations short and give exact click/type steps.
 6. **Unit tests** for every parser (recipes, tags, SNBT, NBT, waypoint files, launcher arguments), using small sample files in `tests/fixtures/`.
+
+## Team workflow (GitHub)
+1. **Never push to `main`.** Start each task on its own branch (`git switch -c <short-name>` off an up-to-date `main`). When it works and the tests pass, push the branch and open a pull request (`gh pr create`, or give the developer the GitHub link). Write the PR description in plain language: what changed, how it was tested, and what still needs testing on a real PC. The owner, or another developer, reviews and merges it.
+2. **Only the owner publishes releases.** Don't change the version number in `jarvis/__init__.py`, don't run `make_zip.bat`, and don't create GitHub Releases or tags. Every friend's Update button installs those releases, so a bad one breaks everyone's Jarvis. If a change is ready to ship, say so in the PR.
+3. **Any developer may pick what to build** (bug fixes, improvements, the next planned stage, Part B), following every rule in this file. Before starting a big feature, check open PRs and branches (`gh pr list`) so two people don't build the same thing, and keep each PR to one task.
+4. **Pull before you start** (`git switch main; git pull`), and if `main` moved while you worked, merge it into your branch and re-run the tests before opening the PR.
+5. **Notes:** `NOTES.md` is the shared developer notes file. Update the section for whatever you changed, replacing old entries rather than adding history. Never put personal details (names, emails, keys, calendar/ClickUp data) in commits, notes, PRs or logs.
+
+## Usage limits (ask once)
+Claude plans have usage limits. In the developer's first session, if your memory doesn't already say, ask which plan they're on (Free, Pro, Max, or API) and whether they want a weekly cap (e.g. "stop at 80% of the week"). Save the answer to your memory. If they're on Free or Pro, or set a cap:
+- Check usage at the start of the session, before any big job and after it. Give each job a budget up front (e.g. "about 10% of the week"), and at the budget or cap, commit work that passes the tests, update `NOTES.md` and stop with a short report instead of pushing on.
+- Screenshots and desktop control are the most expensive tools. Prefer logs, test output and text. If you must, use few screenshots and downscale them.
+- One task per session: when a task is done, update the notes and suggest a fresh session for the next one.
+- Mechanical work (installs, searches, file copies) goes to subagents on a cheaper model. Keep the strongest model for design, debugging and review. Review agents run after big pieces, not after every edit.
+- Read big files by section (grep or line ranges) instead of whole.
+- If one test round fails, stop and rethink before running another, and bundle all open questions into each test round.
+- If unused connectors (calendar, docs, design tools, etc.) are loaded, mention them so the developer can turn them off for this project.
 
 ---
 

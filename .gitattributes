@@ -5,5 +5,8 @@ A*_CHECKLIST.md export-ignore
 A*_MORNING_CHECKLIST.md export-ignore
 run_gui_test.bat export-ignore
 .gitattributes export-ignore
+CONTRIBUTING.md export-ignore
+packaging/** export-ignore
 # Batch files must keep Windows line endings or cmd.exe misreads them.
 *.bat text eol=crlf
+packaging export-ignore
