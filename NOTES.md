@@ -21,6 +21,15 @@
   confirmations (`jarvis/core/personality.py`). New `spotify_volume` tool (Spotify Web API `/me/player/volume`,
   Premium): "music/Spotify volume" goes to it, PC volume tools say so; topic `music_volume`. Still to polish: README/first run, overlay/tray, dead code.
 
+## Learn about me (2026-11-19) — `jarvis/pc/profile.py`, `Brain._maybe_learn`, `tests/test_pc_profile.py`
+- Opt-in `learn_about_me` (Settings > General, off by default). After a conversation ends (end_conversation,
+  clear, shutdown) or every `LEARN_EVERY`=8 questions, one background request to `model_fallback` extracts lasting
+  facts as a JSON list into `%APPDATA%/Jarvis/profile.json` (max 80, oldest-seen dropped, near-duplicates merged).
+- Safety: learns ONLY from the user's own lines (never replies/screen/audio/web), skips "off the record" lines,
+  drops secret-looking facts and instruction-like strings; facts reach prompts wrapped as data, only those that fit
+  the question. Tools: `what_you_know_about_me` (read-only), `forget_about_me` (destructive, confirm; "all" works).
+  core stays independent: profile.py sets `registry.learner`. Not yet tried by voice on a real PC.
+
 ## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, confirmed with real OBS 2026-11-18
 - Tool `clip_that`: OBS Replay Buffer via obs-websocket v5 (OBS 28+, port `obs_port` 4455, password in keyring
   `Jarvis/obs_password`). Protocol checked against obs-websocket protocol.md. No key presses (user chose OBS over

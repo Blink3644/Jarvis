@@ -77,6 +77,8 @@ class Registry:
         self.topic_used: dict[str, int] = {}     # topic -> last turn one of its tools ran
         self.turn_tools: set[str] | None = None  # None = send every tool this turn
         self.send_all_topics: set[str] = set()
+        # learner(transcript, generate) -> facts added; set by the "learn about me" module (pc/profile.py)
+        self.learner: Callable[[list, Callable[[str], str]], list] | None = None
         self.register(Tool(
             name="confirm_action",
             description="Run an action that was waiting for the user's confirmation. Call this ONLY "

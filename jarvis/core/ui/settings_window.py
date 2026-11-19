@@ -119,7 +119,7 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
         if v is not None:
             cfg["live_idle_seconds"] = v
     for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows", "live_mode", "smart_tools",
-              "keep_debug_clips", "stt_gpu",
+              "keep_debug_clips", "stt_gpu", "learn_about_me",
               "calendar_enabled", "clickup_enabled"):
         if k in f:
             cfg[k] = bool(f[k])
@@ -396,6 +396,10 @@ class SettingsWindow:
         self._menu(p, "history_mode", HISTORY_LABELS, c["history_mode"], "Conversation history")
         ctk.CTkButton(p, text="Clear history", width=120, command=self._clear_history,
                       state="normal" if self.h.get("clear_history") else "disabled").pack(anchor="w", padx=8, pady=4)
+        self._check(p, "learn_about_me", c.get("learn_about_me", False),
+                    "Learn about me: Jarvis picks up lasting facts from what you say (your games, people, "
+                    "likes) and uses them later. Only your own words are used, never screen or web text. "
+                    "Say \"what do you know about me?\" or \"forget that ...\". Say \"off the record\" to skip one.")
         self._label(p, "Today's free requests (limits can be edited, Google changes them)", bold=True)
         self.usage_frame = ctk.CTkFrame(p, fg_color="transparent")
         self.usage_frame.pack(fill="x", padx=8)

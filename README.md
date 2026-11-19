@@ -86,6 +86,7 @@ It closes Jarvis, swaps in the new files and starts Jarvis again. Your settings,
 | "How do I beat this boss?" (in a game) | Looks at the game window and answers |
 | "Listen to this, what song is it?" | Records your PC's sound for 15 s and answers |
 | "Remember my locker code is 1234" | Saves a note on your PC. "What did I ask you to remember?" reads them back |
+| "What do you know about me?" | With **Learn about me** on (Settings → General), Jarvis picks up lasting facts from what you say (your games, people, likes) and uses them later. "Forget that my dog is called Max" removes one; say "off the record" to keep a sentence out |
 | "Clip that" | Saves the last stretch of gameplay with OBS. Settings → Integrations → OBS explains the setup |
 | "Stop" | Stops Jarvis talking. Pressing Right Ctrl does the same |
 
@@ -101,6 +102,7 @@ What you say to Jarvis is turned into text **on your PC**. The text of your ques
 - **Screenshots:** in games by default, or only when you ask (Settings → PC → "Let Jarvis look at your screen").
 - **Recordings of your PC's sound:** only when you say "listen to this".
 - **Calendar or ClickUp items:** only if you set those up.
+- **Learn about me** (off by default): what you said is sent once more to the backup model to pick out lasting facts, and the facts that fit a question are sent with it. They're kept in `%APPDATA%\Jarvis\profile.json`.
 - **Spotify:** if you connect it, Jarvis uses your Spotify login to search and control playback. Spotify only lets Premium accounts that the Jarvis app owner has added (5 people max) use the built-in connection; anyone else can paste their own Client ID in settings.
 
 **Free tiers may use your data to improve the provider's products.** On Google's free tier, people at Google may read it. Don't share anything you wouldn't want seen.

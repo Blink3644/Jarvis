@@ -25,6 +25,7 @@ DEFAULTS = {
     "history_mode": "session",        # session | log | remember
     "max_turns": 20,                  # exchanges kept in memory
     "remember_count": 5,              # summaries kept in "remember" mode
+    "learn_about_me": False,          # opt-in: learn lasting facts from what the user says (pc/profile.py)
     "rate_limit_retries": 2,
     # ---- voice (Stage A2) ----
     "mic_device": "",                 # name of the ONLY mic Jarvis listens to ("" = Windows default mic)
