@@ -3,7 +3,9 @@
 SDK: google-genai (checked against v3.4.0 on 2026-11-17).
 """
 import datetime
+import json
 import logging
+import re
 import socket
 import time
 from dataclasses import dataclass, field
@@ -97,6 +99,8 @@ class Brain:
         self.active: str | None = None      # usage key of the fallback slot in use (None = top choice)
         self.blocked_until: dict[str, datetime.datetime] = {}
         self.on_backup = False
+        self._foreign_calls: set[str] = set()   # ids of tool calls made by non-Gemini providers
+        self._n_foreign = 0
         self._client = None
         self._client_key = None
         self.memory = self.history.load_summaries()
@@ -241,7 +245,8 @@ class Brain:
     def _call_slot(self, entry, model, contents, on_text, quick):
         if entry.get("kind") == "gemini":
             timeout = self.cfg.get("main_timeout_s", 10) if quick else None
-            return self._stream(self._get_client(), model, contents, on_text, timeout)
+            return self._stream(self._get_client(), model, _for_gemini(contents, self._foreign_calls),
+                                on_text, timeout)
         api_key = self.get_provider_key(entry["id"])
         if not api_key and not providers.PRESETS.get(entry.get("preset"), {}).get("no_key"):
             raise FriendlyError(f"I don't have an API key for {entry['name']} yet.")
@@ -250,6 +255,12 @@ class Brain:
         timeout = self.cfg.get("main_timeout_s", 10) if quick else 30
         parts = self.adapter_factory(entry).generate(api_key, model, system, contents, tools,
                                                      timeout=max(10, timeout))
+        for p in parts:                 # remember these so Gemini gets them as text later
+            if p.function_call:
+                if not p.function_call.id:
+                    self._n_foreign += 1
+                    p.function_call.id = f"jarvis_call_{self._n_foreign}"
+                self._foreign_calls.add(p.function_call.id)
         text = "".join(p.text for p in parts if p.text)
         if text and on_text:
             on_text(text)       # these APIs are called without streaming: the whole reply at once
@@ -296,12 +307,17 @@ class Brain:
                         self.blocked_until[ukey] = next_reset(self.clock())
                         break
                     if kind == "rate_minute":
-                        if attempt < retries and not others:
-                            self.sleep(2 * (2 ** attempt))
+                        wait = retry_after(e)
+                        if attempt < retries and (not others or (wait is not None and wait <= SHORT_WAIT_S)):
+                            # nowhere else to go, or the limit frees up in a moment: wait for it
+                            self.sleep(wait if wait is not None else 2 * (2 ** attempt))
                             attempt += 1
                             continue
                         minute_limited = True
-                        self.blocked_until[ukey] = self.clock() + datetime.timedelta(seconds=60)
+                        # Groq says exactly when its per-minute token limit frees up (often
+                        # ~15 s); use that so Jarvis goes back to the top choice quickly.
+                        block = min(60.0, wait) if wait else 60.0
+                        self.blocked_until[ukey] = self.clock() + datetime.timedelta(seconds=block)
                         break
                     if kind == "server":
                         if "high demand" in str(e).lower() or more:
@@ -360,6 +376,52 @@ def _message(kind: str, entry: dict, model: str) -> str:
             "model_missing": f"{name} doesn't recognise the model name {model}. Please pick another in settings.",
             "offline": _MESSAGES["offline"],
             }.get(kind, f"Sorry, something went wrong talking to {name}. The details are in the log.")
+
+
+SHORT_WAIT_S = 3.0
+_RETRY_RE = re.compile(r"(?:try again|retry) in\s+(?:(\d+)h)?\s*(?:(\d+)m(?!s))?\s*(?:([\d.]+)(ms|s))?",
+                       re.IGNORECASE)
+
+
+def retry_after(e: Exception) -> float | None:
+    """Seconds until a per-minute limit frees up, from the error text ("try again in 17.1s")."""
+    m = _RETRY_RE.search(str(e))
+    if not m or not any(m.groups()[:3]):
+        return None
+    h, mins, num, unit = m.groups()
+    secs = int(h or 0) * 3600 + int(mins or 0) * 60
+    if num:
+        secs += float(num) / (1000 if unit.lower() == "ms" else 1)
+    return secs
+
+
+def _for_gemini(contents: list[types.Content], foreign: set[str]) -> list[types.Content]:
+    """Tool calls made by another provider (Groq, OpenAI...) have no thought signature, and
+    Gemini rejects those ("Function call is missing a thought_signature"). Turn them and
+    their results (matched by call id) into plain text notes so Gemini can take over
+    mid-conversation. Gemini's own calls are left exactly as they were."""
+    if not foreign:
+        return contents
+    out: list[types.Content] = []
+    for c in contents:
+        parts = list(c.parts or [])
+        if not any((p.function_call and p.function_call.id in foreign)
+                   or (p.function_response and p.function_response.id in foreign) for p in parts):
+            out.append(c)
+            continue
+        new = []
+        for p in parts:
+            fc, fr = p.function_call, p.function_response
+            if fc and fc.id in foreign:
+                args = json.dumps(dict(fc.args or {}), default=str)
+                new.append(types.Part(text=f"[I called the tool {fc.name} with {args}]"))
+            elif fr and fr.id in foreign:
+                res = json.dumps(fr.response, default=str)
+                new.append(types.Part(text=f"[The tool {fr.name} returned: {res}]"))
+            else:
+                new.append(p)
+        out.append(types.Content(role=c.role, parts=new))
+    return out
 
 
 def _media_part(m) -> types.Part:

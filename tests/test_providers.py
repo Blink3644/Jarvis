@@ -197,3 +197,79 @@ def test_adapters_parse_replies(monkeypatch):
     assert parts[0].text == "hey" and parts[1].function_call.id == "u"
     assert seen["headers"]["x-api-key"] == "K" and seen["body"]["system"] == "sys"
     assert seen["body"]["tools"][0]["input_schema"]["type"] == "object"
+
+
+# ---- Groq first, Gemini second (bug: kept switching to Gemini, then Gemini 400'd) ----
+def make_groq_first(gemini_script, groq_script):
+    cfg = config.load()
+    cfg["providers"] = [entry("groq", ["big", "small"]), dict(providers.GEMINI_ENTRY)]
+    reg = Registry()
+    basic_tools.register(reg)
+    gem = FakeClient(gemini_script)
+    fa = FakeAdapter(groq_script)
+    slept = []
+    b = Brain(cfg, reg, client_factory=lambda k: gem, sleep=slept.append,
+              get_key=lambda: "gem-key", get_provider_key=lambda pid: "k", adapter_factory=fa.factory)
+    return b, fa, gem, slept
+
+
+def groq_tpm(secs="17.13s"):
+    return ProviderError(429, '{"error":{"message":"Rate limit reached for model on tokens per minute '
+                              f'(TPM): Limit 8000, Used 6835, Requested 3449. Please try again in {secs}."}}}}')
+
+
+def call(name):
+    return [types.Part(function_call=types.FunctionCall(id="call_1", name=name, args={}))]
+
+
+def test_retry_after_parses_hints():
+    from jarvis.core.brain import retry_after
+    assert retry_after(groq_tpm("17.13s")) == 17.13
+    assert retry_after(groq_tpm("1m30.5s")) == 90.5
+    assert retry_after(groq_tpm("250ms")) == 0.25
+    assert retry_after(Exception("Please retry in 6h11m46.3s")) == 6 * 3600 + 11 * 60 + 46.3
+    assert retry_after(Exception("nope")) is None
+
+
+def test_gemini_takeover_mid_turn_gets_groq_tool_calls_as_text():
+    # Groq asks for a tool, then hits its per-minute token limit on both models; Gemini finishes.
+    b, fa, gem, _ = make_groq_first(
+        [(MAIN, text_chunks("It's noon."))],
+        [("groq", call("get_time")), ("groq", groq_tpm()), ("groq", groq_tpm())])
+    r = b.ask("what time is it?")
+    assert r.ok and r.text == "It's noon.", r.text
+    sent = gem.models.calls[0][1]
+    assert not any(p.function_call or p.function_response for c in sent for p in c.parts or [])
+    flat = " ".join(p.text or "" for c in sent for p in c.parts or [])
+    assert "get_time" in flat and "returned" in flat
+
+
+def test_groq_short_wait_is_waited_out_not_switched():
+    b, fa, gem, slept = make_groq_first([], [("groq", groq_tpm("1.2s")), ("groq", text("hi"))])
+    r = b.ask("hi")
+    assert r.ok and r.text == "hi" and r.notices == [] and slept == [1.2]
+
+
+def test_groq_comes_back_after_its_own_wait_not_a_full_minute():
+    import datetime as dt
+    now = [dt.datetime(2026, 11, 18, 20, 0, tzinfo=dt.timezone.utc)]
+    b, fa, gem, _ = make_groq_first(
+        [(MAIN, text_chunks("from gemini"))],
+        [("groq", groq_tpm("17s")), ("groq", groq_tpm("16s")), ("groq", text("groq again"))])
+    b.clock = lambda: now[0]
+    assert b.ask("one").text == "from gemini"
+    now[0] += dt.timedelta(seconds=20)
+    assert b.ask("two").text == "groq again"
+
+
+def test_gemini_own_tool_calls_keep_structure():
+    from jarvis.core.brain import _for_gemini
+    own = types.Content(role="model", parts=[types.Part(
+        function_call=types.FunctionCall(name="get_time", args={}), thought_signature=b"sig")])
+    resp = types.Content(role="user", parts=[types.Part(
+        function_response=types.FunctionResponse(name="get_time", response={"t": 1}))])
+    out = _for_gemini([own, resp], {"call_1"})
+    assert out[0].parts[0].function_call and out[1].parts[0].function_response
+    # an unsigned call that Gemini made itself (no id from another provider) is kept too
+    own.parts[0].thought_signature = None
+    assert _for_gemini([own, resp], {"call_1"})[0].parts[0].function_call

@@ -122,6 +122,11 @@
   and providers lacking image/audio input for this question (one-off notice, no "switch").
   Notices: Gemini backup = old BACKUP_NOTICE; other provider = "Switching to X for a bit." once.
   Gemini-only setups behave exactly as before (all old tests unchanged).
+- Per-minute limits: the provider's "try again in Xs" hint (`retry_after`) is used; <= 3 s is waited out,
+  otherwise the slot is blocked for that long (max 60 s). Groq free tier = 8,000 tokens/min per model and
+  a Jarvis request is ~3,400 tokens, so ~2 requests/min per model is normal.
+- Tool calls made by non-Gemini providers are tracked by id (`Brain._foreign_calls`) and sent to Gemini as
+  text notes (`_for_gemini`); otherwise Gemini 400s with "missing a thought_signature" when it takes over.
 - Settings: "AI providers" tab (add preset, key, Test key = lists models, models comma list, Up/Down,
   on/off, Remove deletes key). Capabilities per preset: images on for OpenAI/Anthropic/OpenRouter,
   audio only Gemini (flags `images`/`audio` in config if a model differs).
