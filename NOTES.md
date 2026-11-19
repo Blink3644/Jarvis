@@ -13,7 +13,12 @@
   repo's Releases page shows it before starting A7.
 - Waiting for the user's tests: A5 checklist, A8 Live mode, wake-word mishearing fix, custom wake word (don't ask).
 - A7 updater: `jarvis/core/updater.py` checks Blink3644/Jarvis releases (once a day at startup + About tab button), verifies, then runs the installed `update.ps1 -Auto` (rollback if the new version exits within 20 s). Uses GitHub's source zip if no zip is attached. Refuses releases whose files' __version__ != tag. Dev copies (.git) can't self-update. Stopgap built 2026-11-18: update.bat/update.ps1 in the zip (manual unzip + double-click, tested on a fake install). v0.1.1 = AQ. Gemini key fix + update.bat.
-- Weekly usage cap 88%.
+- Weekly usage cap 92%.
+- Polish pass (branch `polish-settings-messages`, 2026-11-18): settings wording (Remove / Move up / Move down /
+  "Run without asking" / provider "Understands:" / Minecraft "not built yet"); limit and server errors are
+  provider-neutral when non-Gemini providers are set up ("All my AI providers are out of requests..."); the
+  system prompt now asks for answer-first replies, spoken-style numbers, no URLs read aloud and short action
+  confirmations (`jarvis/core/personality.py`). Still to polish: README/first run, overlay/tray, dead code.
 
 ## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, confirmed with real OBS 2026-11-18
 - Tool `clip_that`: OBS Replay Buffer via obs-websocket v5 (OBS 28+, port `obs_port` 4455, password in keyring
