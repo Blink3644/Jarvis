@@ -36,6 +36,7 @@ DEFAULTS = {
     "wake_model": "hey_jarvis",
     "wake_sensitivity": 0.5,          # 0.1 (strict) .. 0.9 (very sensitive)
     "stt_model": "base.en",           # faster-whisper model: one of STT_MODELS
+    "stt_gpu": False,                 # opt-in: Whisper large-v3-turbo on the graphics card (DirectML)
     "keep_debug_clips": False,        # opt-in: keep the last 20 voice commands (WAV + text) for tuning
     "main_timeout_s": 10,
     "home_city": "",                  # for weather, e.g. "Leeds"
