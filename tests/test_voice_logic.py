@@ -1,5 +1,5 @@
 from jarvis.core.voice.endpoint import DONE, SPEAKING, TIMEOUT, WAITING, EndpointSettings, Endpointer
-from jarvis.core.voice.text import SentenceSplitter, is_stop_command, speakable, strip_wake_words
+from jarvis.core.voice.text import SentenceSplitter, is_stop_command, speakable, strip_wake_command, strip_wake_words
 
 
 def test_splitter_streams_sentences():
@@ -31,6 +31,20 @@ def test_strip_wake_words():
     assert strip_wake_words("Hey Jarvis, what time is it?") == "what time is it?"
     assert strip_wake_words("jarvis what's up") == "what's up"
     assert strip_wake_words("what time is it") == "what time is it"
+
+
+def test_strip_wake_command_drops_chatter_before_wake():
+    assert strip_wake_command("Hey Jarvis, skip this song.") == "skip this song."
+    assert strip_wake_command("so anyway. Hey Jarvis play something funky") == "play something funky"
+    assert strip_wake_command("I made for my brother. Hey Jarvis stop") == "stop"
+    assert strip_wake_command("Hey, Travis, pause music") == "pause music"
+    # a later 'Jarvis' belongs to the command
+    assert strip_wake_command("Hey Jarvis, open the Jarvis settings") == "open the Jarvis settings"
+    assert strip_wake_command("what time is it") == "what time is it"
+    assert strip_wake_command("") == ""
+    # wake word not among the first words -> leave the text alone
+    long = "one two three four five six seven eight nine ten jarvis eleven"
+    assert strip_wake_command(long) == long
 
 
 def run(ep, pattern):

@@ -101,3 +101,21 @@ def is_closing_remark(text: str) -> bool:
 def strip_wake_words(text: str) -> str:
     """'Hey Jarvis, what time is it?' -> 'what time is it?'"""
     return _WAKE_PREFIX.sub("", text.strip()).strip()
+
+
+_WAKE_ANYWHERE = re.compile(r"\b(?:(?:hey|hi|hay|okay|ok)\W+)?(jarvis|jervis|travis)\b\W*", re.I)
+WAKE_LOOKBACK_WORDS = 8   # the pre-roll is ~1.6 s, so the wake phrase is among the first few words
+
+
+def strip_wake_command(text: str) -> str:
+    """For wake-word turns, whose audio starts ~1.6 s before the wake word fired.
+
+    Drops the wake phrase and anything said just before it:
+    'so anyway. Hey Jarvis, skip this song' -> 'skip this song'.
+    Only the first few words are searched, so a 'Jarvis' later in the command is kept.
+    """
+    t = (text or "").strip()
+    m = _WAKE_ANYWHERE.search(t)
+    if m and len(t[:m.start()].split()) <= WAKE_LOOKBACK_WORDS:
+        return t[m.end():].strip()
+    return strip_wake_words(t)

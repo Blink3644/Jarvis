@@ -1,8 +1,8 @@
 # Jarvis — current state
 
-**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. Stage A6 (setup.bat, run.bat, make_zip.bat, README) built 2026-11-18; clean install tested (238 pass in fresh copy); pushed to https://github.com/Blink3644/Jarvis (public, `origin`, branch main) 2026-11-18. A7 (in-app updater) built 2026-11-18 as v0.1.3, waiting for the user's test with a real release.**
+**Stage A1 confirmed by user (2026-11-17). Stage A2 confirmed by user (2026-11-17, via VB-Cable mic; occasional slowness = main model stalls). Stage A3 confirmed by user (2026-11-17). Stage A4 confirmed by user (2026-11-17); custom wake-word training built 2026-11-17, waiting for the user's test. Stage A5 (Calendar + ClickUp) built 2026-11-17, waiting for the user's test (A5_CHECKLIST.md). Stage A8 (Gemini Live, experimental, off by default) built 2026-11-17, waiting for the user's test. Stage A6 (setup.bat, run.bat, make_zip.bat, README) built 2026-11-18; clean install tested (238 pass in fresh copy); pushed to https://github.com/Blink3644/Jarvis (public, `origin`, branch main) 2026-11-18. A7 (in-app updater) confirmed by user 2026-11-18 (real release). "Clip that" (real OBS) and Groq provider confirmed by user 2026-11-18.**
 
-- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (306 pass).
+- Run: `console_test.bat` (or `.venv\Scripts\python -m jarvis`; `--text` = typing only). Tests: `.venv\Scripts\python -m pytest -q` (308 pass).
 - SDK `google-genai` 3.4.0. Models (checked 2026-11-17): main `gemini-3.8-flash`, backup `gemini-3.5-flash-lite`.
   `gemini-2.5-*` deprecated from 2026-12-01. Daily quota reset = midnight Pacific. `daily_limits`: main 20/day confirmed from a real 429 (quotaValue 20, 2026-11-17); lite 1000 still a guess.
 - A1 verified live: bad key message, key redacted in log, tool call, 503 -> backup model.
@@ -11,16 +11,15 @@
 - Code is on GitHub: https://github.com/Blink3644/Jarvis (`origin`, main tracks origin/main). Push after each commit.
 - `dist\Jarvis-0.1.0.zip` built; the user publishes Release `v0.1.0` with it attached (README bottom). Check the
   repo's Releases page shows it before starting A7.
-- Waiting for the user's tests: "clip that" with real OBS, A5 checklist, A8 Live mode, custom wake word (don't ask).
+- Waiting for the user's tests: A5 checklist, A8 Live mode, wake-word mishearing fix, custom wake word (don't ask).
 - A7 updater: `jarvis/core/updater.py` checks Blink3644/Jarvis releases (once a day at startup + About tab button), verifies, then runs the installed `update.ps1 -Auto` (rollback if the new version exits within 20 s). Uses GitHub's source zip if no zip is attached. Refuses releases whose files' __version__ != tag. Dev copies (.git) can't self-update. Stopgap built 2026-11-18: update.bat/update.ps1 in the zip (manual unzip + double-click, tested on a fake install). v0.1.1 = AQ. Gemini key fix + update.bat.
 - Weekly usage cap 88%.
 
-## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, waiting for the user's test with real OBS
+## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, confirmed with real OBS 2026-11-18
 - Tool `clip_that`: OBS Replay Buffer via obs-websocket v5 (OBS 28+, port `obs_port` 4455, password in keyring
   `Jarvis/obs_password`). Protocol checked against obs-websocket protocol.md. No key presses (user chose OBS over
   Game Bar/NVIDIA hotkeys, which would break the no-keystrokes rule). Buffer off -> Jarvis starts it and says so.
-  Settings > Integrations > OBS: port, password, Test OBS. "clip that" skips auto-look. Tested vs a fake local
-  server only; NOT verified with real OBS.
+  Settings > Integrations > OBS: port, password, Test OBS. "clip that" skips auto-look.
 
 ## Safety rules (2026-11-17) — `jarvis/core/registry.py`, `tests/test_safety.py`
 - `Tool.side_effect` (default True), `Tool.brings_data`, `Tool.gate`. `registry.tainted` is set when a data tool runs or an auto-look screenshot is attached; then side-effect tools need confirm_action in a later turn.
@@ -104,10 +103,12 @@
   small.en 1.2 s, so mis-hearings likely come from the VB-Cable signal chain. Settings now offer stt_model.
 - Flaky test_wake_command_reply_followup_then_idle: GC ran leftover Tk font __del__ (dead Tk thread, ~1 s per
   call) inside the voice-turn thread. Test-only; fixed with gc.collect() in make().
-- Mis-hearing: faster-whisper vad_filter is NOT the cause (same text on/off; in the log it removed 0 s in 47/60
-  clips, otherwise trailing silence). Very quiet input reproduces the errors ("via git" -> "by a GIC" at 3% volume).
-  "heard" log lines now include the peak level (e.g. "level -12 dB"); below about -30 dB means the VB-Cable chain is
-  too quiet. Next: read those levels from the user's next session before changing any code.
+- Mis-hearing (fixed 2026-11-18, waiting for the user's test): real levels were fine (-4 to -14 dB). Cause: wake turns
+  started with only 0.24 s before the wake fired = the tail of "Jarvis", which Whisper heard as "Just ..." / "Please ..." /
+  "service, ..." / "this, ..." (reproduced exactly with edge-tts clips + the real wake model). Now wake turns keep 1.6 s
+  (`WAKE_PREROLL`), "Jarvis" is a hint word, and `text.strip_wake_command` cuts the wake phrase and any chatter before it
+  (first 8 words only, so a later "Jarvis" stays). 24/24 synthetic clips clean (3 voices). PTT keeps 0.24 s. Live mode unchanged.
+  Peak level is still in "heard" lines; below about -30 dB = too quiet.
 
 ## Multiple AI providers (2026-11-17)
 - `core/providers.py`: adapters behind `generate(key, model, system, contents, tools) -> list[types.Part]`
@@ -124,8 +125,7 @@
 - Settings: "AI providers" tab (add preset, key, Test key = lists models, models comma list, Up/Down,
   on/off, Remove deletes key). Capabilities per preset: images on for OpenAI/Anthropic/OpenRouter,
   audio only Gemini (flags `images`/`audio` in config if a model differs).
-- API formats taken from the providers' long-standing public docs; NOT verified live this session
-  (no keys, budget). First real test per provider = the user's checklist.
+- Groq confirmed working by user 2026-11-18. OpenAI/Anthropic/others: formats from public docs, NOT verified live.
 - Not done: streaming for non-Gemini providers; Test key doesn't fill the models field automatically.
 
 ## Team setup (2026-11-18)

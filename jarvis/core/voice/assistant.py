@@ -19,7 +19,7 @@ from jarvis.core.secrets import redact
 from .endpoint import DONE, SPEAKING, TIMEOUT, EndpointSettings, Endpointer
 from jarvis.core.personality import sign_off
 
-from .text import SentenceSplitter, is_closing_remark, is_stop_command, strip_wake_words
+from .text import SentenceSplitter, is_closing_remark, is_stop_command, strip_wake_command
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +27,10 @@ RATE = 16000
 FRAME = 1280            # 80 ms, what openwakeword wants
 SUB = 320               # 20 ms, what the VAD wants
 SELF_GUARD_S = 0.5      # wake word stays paused this long after Jarvis stops talking
-PREROLL_FRAMES = 8      # 0.64 s kept from before a wake word / key press
+PREROLL_FRAMES = 20     # 1.6 s kept from before a wake word / key press
+WAKE_PREROLL = 20       # wake turns keep all of it: Whisper must hear the whole "Hey Jarvis" so it can be
+                        # stripped; a shorter clip held only "-vis", heard as "Just ..." / "service, ..."
+PTT_PREROLL = 3         # 0.24 s: catches a word started just before the key press
 
 def level_db(audio) -> str:
     """Peak level of a recording in dBFS, for the log ('-6 dB' is loud, below '-30 dB' is too quiet)."""
@@ -262,7 +265,8 @@ class VoiceAssistant:
             self._start_live(source)
             return
         self.source = source
-        self.buf = list(self.ring)[-3:] if source in ("wake", "ptt") and not fallback else []
+        keep = {"wake": WAKE_PREROLL, "ptt": PTT_PREROLL}.get(source, 0) if not fallback else 0
+        self.buf = list(self.ring)[-keep:] if keep else []
         max_ms = int(self.cfg.get("max_record_seconds", 15) * 1000)
         if source == "followup":
             start_ms = int(self.cfg.get("followup_seconds", 5) * 1000)
@@ -502,11 +506,12 @@ class VoiceAssistant:
     def _turn_body(self, turn, audio, source):
         t_end = turn["speech_end"]
         self.speaker.mark_turn_start()
-        hints = sorted(set(self.registry.hint_words) | set(self.cfg.get("hint_words") or []))
+        hints = sorted(set(self.registry.hint_words) | set(self.cfg.get("hint_words") or [])
+                       | ({"Jarvis"} if source == "wake" else set()))
         text = self.stt.transcribe(audio, hints=hints)
         t_stt = self.clock()
         if source == "wake":
-            text = strip_wake_words(text)
+            text = strip_wake_command(text)
         log.info("heard (%s, stt %.2fs, level %s): %r", source, t_stt - t_end, level_db(audio), redact(text))
         if turn["cancelled"]:
             return
