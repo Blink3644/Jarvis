@@ -115,3 +115,16 @@ def test_brain_learns_after_enough_questions_and_on_close(cfg):
     assert got[-1] == [("You", "bye"), ("Jarvis", "ok")]   # only the new part
     b.close()
     assert len(got) == 2                   # nothing new, no second request
+
+
+def test_update_fact_keeps_the_rules():
+    profile.add_facts(["The user's dog is called Max."])
+    fid = profile.load_facts()[0]["id"]
+    assert profile.update_fact(fid, "  The user's dog is   called Rex. ") is None
+    assert profile.load_facts()[0]["text"] == "The user's dog is called Rex."
+    assert profile.update_fact(fid, "hi")                                   # too short: refused
+    assert profile.update_fact(fid, "The user's password is hunter2!")     # secret: refused
+    assert profile.load_facts()[0]["text"] == "The user's dog is called Rex."
+    assert profile.update_fact(999, "The user likes jazz music.")           # unknown id
+    profile.update_fact(fid, "The user likes " + "very " * 60 + "long facts.")
+    assert len(profile.load_facts()[0]["text"]) == profile.MAX_FACT_LEN

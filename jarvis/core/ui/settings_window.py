@@ -1,4 +1,5 @@
-"""Settings window (Stage A4): tabs for General, Voice, PC, Notes, Routines, Integrations, Minecraft, About.
+"""Settings window (Stage A4): tabs for General, Voice, PC, Notes, What Jarvis knows, Routines, Integrations,
+Minecraft, About.
 
 Form logic (parsing/validation) is in plain functions at the top so it can be tested
 without a screen. The widgets are below.
@@ -347,13 +348,15 @@ class SettingsWindow:
         ctk = self.ctk
         self.tabs = ctk.CTkTabview(self.win, command=self._tab_changed)
         self.tabs.pack(fill="both", expand=True, padx=8, pady=(8, 0))
-        for name in ("General", "AI providers", "Voice", "PC", "Notes", "Routines", "Integrations", "Minecraft", "About"):
+        for name in ("General", "AI providers", "Voice", "PC", "Notes", "What Jarvis knows", "Routines",
+                     "Integrations", "Minecraft", "About"):
             self.tabs.add(name)
         self._general(self.tabs.tab("General"))
         self._providers_tab(self.tabs.tab("AI providers"))
         self._voice(self.tabs.tab("Voice"))
         self._pc(self.tabs.tab("PC"))
         self._notes(self.tabs.tab("Notes"))
+        self._knows(self.tabs.tab("What Jarvis knows"))
         self._routines(self.tabs.tab("Routines"))
         self._integrations(self.tabs.tab("Integrations"))
         self._minecraft(self.tabs.tab("Minecraft"))
@@ -748,6 +751,75 @@ class SettingsWindow:
         from jarvis.pc import notes
         notes.delete_note(nid)
         self._fill_notes()
+
+    # ---- what Jarvis knows (facts from "Learn about me"; pc code is reached only through self.h)
+    def _knows(self, tab):
+        ctk = self.ctk
+        self.knows_state = ctk.CTkLabel(tab, text="", anchor="w", justify="left", wraplength=620)
+        self.knows_state.pack(fill="x", padx=8, pady=(6, 0))
+        learn = self.vars.get("learn_about_me")
+        if learn is not None:            # follows the General tab tick box, before Save too
+            learn.trace_add("write", lambda *_: self._knows_state_text())
+        self._knows_state_text()
+        self.knows_frame = ctk.CTkScrollableFrame(tab)
+        self.knows_frame.pack(fill="both", expand=True, pady=4)
+        self.knows_forget_btn = ctk.CTkButton(tab, text="Forget everything", width=140, fg_color="firebrick",
+                                              command=self._knows_forget_all)
+        self.knows_forget_btn.pack(anchor="w", padx=8, pady=(0, 4))
+        self._fill_knows()
+
+    def _knows_state_text(self):
+        learn = self.vars.get("learn_about_me")
+        on = bool(learn.get()) if learn is not None else bool(self.cfg.get("learn_about_me", False))
+        self.knows_state.configure(text=(
+            "Learn about me is ON: Jarvis picks up lasting facts from what you say." if on else
+            "Learn about me is OFF: Jarvis isn't learning anything new.")
+            + " Switch it on or off on the General tab. Changes here are saved straight away.")
+
+    def _fill_knows(self):
+        ctk = self.ctk
+        for w in self.knows_frame.winfo_children():
+            w.destroy()
+        facts = self.h.call("profile_facts", default=None)
+        if facts is None:
+            ctk.CTkLabel(self.knows_frame, text="This list is not available.").pack(anchor="w")
+            self.knows_forget_btn.configure(state="disabled")
+            return
+        self.knows_forget_btn.configure(state="normal" if facts else "disabled")
+        if not facts:
+            ctk.CTkLabel(self.knows_frame, text="Jarvis hasn't learned anything about you yet.").pack(anchor="w")
+        for f in facts:
+            row = ctk.CTkFrame(self.knows_frame)
+            row.pack(fill="x", pady=2)
+            v = ctk.StringVar(value=f["text"])
+            ctk.CTkEntry(row, textvariable=v).pack(side="left", fill="x", expand=True, padx=4)
+            ctk.CTkLabel(row, text=str(f.get("learned", ""))[:10], width=80).pack(side="left")
+            ctk.CTkButton(row, text="Save", width=56,
+                          command=lambda i=f["id"], v=v: self._knows_edit(i, v)).pack(side="left", padx=2)
+            ctk.CTkButton(row, text="Delete", width=56, fg_color="firebrick",
+                          command=lambda i=f["id"]: self._knows_delete(i)).pack(side="left", padx=2)
+
+    def _knows_edit(self, fid, var):
+        problem = self.h.call("profile_update", fid, var.get(), default="Could not save that.")
+        self._say(problem or "Saved.")
+        self._fill_knows()
+
+    def _knows_delete(self, fid):
+        self.h.call("profile_delete", fid)
+        self._say("Deleted.")
+        self._fill_knows()
+
+    def _knows_forget_all(self):
+        if not self._ask_yes("Forget everything?", "Are you sure? Jarvis will forget everything it has learned "
+                                                   "about you. This can't be undone."):
+            return
+        n = self.h.call("profile_forget_all", default=0) or 0
+        self._say(f"Forgot {n} thing{'s' if n != 1 else ''}.")
+        self._fill_knows()
+
+    def _ask_yes(self, title, text):
+        from tkinter import messagebox
+        return messagebox.askyesno(title, text, parent=self.win)
 
     # ---- routines
     def _routines(self, tab):

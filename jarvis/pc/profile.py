@@ -105,6 +105,25 @@ def add_facts(new: list[str]) -> list[dict]:
     return added
 
 
+def update_fact(fact_id: int, text: str) -> str | None:
+    """Change a fact's wording (from the settings window). Same rules as add_facts.
+    Returns None when saved, otherwise a short plain reason it wasn't."""
+    text = _clean(text)
+    if len(text) < 6:
+        return "That's too short to keep."
+    if looks_secret(text):
+        return "That looks like a password or code, so Jarvis won't keep it."
+    with _lock:
+        facts = load_facts()
+        for f in facts:
+            if int(f.get("id", -1)) == int(fact_id):
+                f["text"] = text
+                f["seen"] = _now()
+                save_facts(facts)
+                return None
+    return "That fact no longer exists."
+
+
 def delete_fact(fact_id: int) -> bool:
     with _lock:
         facts = load_facts()

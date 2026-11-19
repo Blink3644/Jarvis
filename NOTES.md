@@ -29,6 +29,12 @@
   drops secret-looking facts and instruction-like strings; facts reach prompts wrapped as data, only those that fit
   the question. Tools: `what_you_know_about_me` (read-only), `forget_about_me` (destructive, confirm; "all" works).
   core stays independent: profile.py sets `registry.learner`. Not yet tried by voice on a real PC.
+- Settings > "What Jarvis knows" tab: lists facts with Save (edit) / Delete, "Forget everything" (Are-you-sure
+  dialog), and shows whether Learn about me is on (follows the General tick box live). Changes save at once.
+  It reaches pc code only through app.py hooks `profile_facts/profile_update/profile_delete/profile_forget_all`.
+  `profile.update_fact(id, text)` applies the add_facts rules (`_clean`, min 6 chars, refuses `looks_secret`,
+  cut to `MAX_FACT_LEN`) and returns None or a plain reason. UI only: no voice tool changes it.
+  Not yet clicked through on a real PC.
 
 ## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, confirmed with real OBS 2026-11-18
 - Tool `clip_that`: OBS Replay Buffer via obs-websocket v5 (OBS 28+, port `obs_port` 4455, password in keyring

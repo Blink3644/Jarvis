@@ -335,6 +335,23 @@ class App:
             def install_update(self, folder):
                 app.install_update(folder)
 
+            # "What Jarvis knows" tab (core never imports pc at module level)
+            def profile_facts(self):
+                from jarvis.pc import profile
+                return profile.load_facts()
+
+            def profile_update(self, fact_id, text):
+                from jarvis.pc import profile
+                return profile.update_fact(fact_id, text)
+
+            def profile_delete(self, fact_id):
+                from jarvis.pc import profile
+                return profile.delete_fact(fact_id)
+
+            def profile_forget_all(self):
+                from jarvis.pc import profile
+                return profile.forget_all()
+
             def tool_names(self):
                 return [d["name"] for d in app.registry.declarations()]
 
