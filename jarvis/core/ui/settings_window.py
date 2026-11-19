@@ -119,6 +119,7 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
         if v is not None:
             cfg["live_idle_seconds"] = v
     for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows", "live_mode",
+              "keep_debug_clips",
               "calendar_enabled", "clickup_enabled"):
         if k in f:
             cfg[k] = bool(f[k])
@@ -596,6 +597,11 @@ class SettingsWindow:
                        "first use downloads ~480 MB; restart Jarvis after changing)")
         v = self._var("stt_model", c.get("stt_model", "base.en"))
         ctk.CTkOptionMenu(p, variable=v, values=list(config.STT_MODELS)).pack(anchor="w", padx=8)
+        self._check(p, "keep_debug_clips", c.get("keep_debug_clips", False),
+                    "Keep my last 20 voice commands for tuning (saved on this PC only, "
+                    "in %APPDATA%\Jarvis\debug_clips)")
+        ctk.CTkButton(p, text="Delete saved voice commands", width=220,
+                      command=self._clear_debug_clips).pack(anchor="w", padx=8, pady=(2, 4))
 
     def _wake_picker(self, p):
         from ..voice import wakewords
@@ -1221,6 +1227,11 @@ class SettingsWindow:
             self.win.after(0, lambda: self.wake_label.configure(text=text))
         except Exception:
             pass
+
+    def _clear_debug_clips(self):
+        from ..voice import debug_clips
+        n = debug_clips.clear()
+        self._say(f"Deleted {n} saved voice command{'s' if n != 1 else ''}.")
 
     def _clear_history(self):
         self.h.call("clear_history")

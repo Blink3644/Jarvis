@@ -513,6 +513,12 @@ class VoiceAssistant:
         if source == "wake":
             text = strip_wake_command(text)
         log.info("heard (%s, stt %.2fs, level %s): %r", source, t_stt - t_end, level_db(audio), redact(text))
+        if self.cfg.get("keep_debug_clips"):
+            try:
+                from . import debug_clips
+                debug_clips.save(audio, text, source)
+            except Exception:
+                log.warning("couldn't save the debug clip", exc_info=True)
         if turn["cancelled"]:
             return
         if (source != "followup" or _meaningful(text)) and is_closing_remark(text) \
