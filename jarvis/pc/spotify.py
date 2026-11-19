@@ -195,7 +195,7 @@ class Client:
             return self.access
         rt = self.refresh_fn()
         if not rt:
-            raise SpotifyError("Spotify isn't connected. Connect it in settings, on the Integrations tab.")
+            raise SpotifyError("Spotify isn't connected. Connect it in settings, on the Integrations page.")
         tok = _token_request(self.http, {"grant_type": "refresh_token", "refresh_token": rt,
                                          "client_id": self.cid})
         self.access = tok["access_token"]

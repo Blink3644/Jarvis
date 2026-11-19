@@ -220,7 +220,7 @@ class App:
             return
         if info:
             self.update_info = info
-            msg = f"Jarvis version {info.version} is available. Open settings, About tab, to update."
+            msg = f"Jarvis version {info.version} is available. Open settings, About page, to update."
             self.ui.notice(msg)
             self.tray.warn(msg)
 

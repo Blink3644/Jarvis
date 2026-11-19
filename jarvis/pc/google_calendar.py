@@ -185,7 +185,7 @@ def event_body(title: str, start, duration_minutes: int = 60) -> dict:
 # ---------- API calls ----------
 def _friendly(e: Exception) -> dict:
     if isinstance(e, NotConnected):
-        return {"error": "Google Calendar isn't connected. Connect it in settings, on the Integrations tab."}
+        return {"error": "Google Calendar isn't connected. Connect it in settings, on the Integrations page."}
     if isinstance(e, (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError)):
         return {"error": "I can't reach Google Calendar. The internet may be down."}
     if type(e).__name__ == "RefreshError":

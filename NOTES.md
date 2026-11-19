@@ -121,6 +121,15 @@
 ## Stage A4 (UI) — `jarvis/core/ui/`, run `python -m jarvis --gui` (`run_gui_test.bat`, pythonw)
 - app.py ties it together: overlay.py owns the only Tk thread; settings_window.py (customtkinter) is built on it via
   `overlay.call(fn)`; tray.py (pystray) own thread; FrontEnd forwards voice status to panel + tray.
+- Settings layout (2026-11-19, branch `settings-layout`): 900x620 window, left sidebar of pages (`PAGES`: General,
+  AI & usage, AI providers, Voice, PC, Privacy & memory, Notes, Routines, Integrations, About, Minecraft last and
+  greyed). Each page = its own builder method (`_general`, `_ai_usage`, `_privacy`, ...); `show_page(name)`.
+  Privacy & memory holds history + Clear history, auto-look, never-screenshot, Learn about me and the "What Jarvis
+  knows" list (`_knows`, now a plain frame inside the scrolling page). Config keys and `self.vars` names unchanged.
+  Search: `_label`/`_check` add (page, text) to `search_index` while building (coloured notes/warnings are skipped);
+  pure `find_settings(index, query)` = every query word in the label. Typing greys pages without a hit, lights up
+  matching labels and jumps to the first hit's page (stays put if the current page has one). Help: `HELP_TEXTS`
+  dict + `_help(row, key)` "?" button (messagebox); `_menu`/`_check` take `help=`.
 - Settings hooks: test_key (models.get, no quota; keep the Client object alive or the SDK closes it), test_wake,
   mic_level (va.tap), reopen_mic, apply (updates the shared cfg dict in place), clear_history, check_usage, tool_names.
 - Mute = `va.muted` (frames dropped, PTT ignored). Long answers in reply mode "both": speak `spoken_sentence_limit`
