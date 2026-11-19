@@ -59,6 +59,14 @@
   hiss wake 0.33 (<0.5), no false follow-up. STT 0.3 s, backup Gemini first chunk 1.6 s, edge first chunk 0.6-1.5 s.
 - Main model 503 "high demand" can take 24 s to fail -> main gets a 10 s deadline (`main_timeout_s`, server min 10 s), any server error on main goes straight to backup (no retry),
   then backup for 60 s. NOT verified: live mic, speakers, real latency (log `latency:` lines). See A2_MORNING_CHECKLIST.md.
+- GPU speech (opt-in `stt_gpu`, "Use graphics card for speech", branch stt-accuracy): `gpu_stt.py` + `gpu_worker.py`.
+  Whisper large-v3-turbo ONNX fp16 (HF onnx-community, ~1.9 GB) on onnxruntime-directml 1.24.4 (AMD/Intel/NVIDIA).
+  Own venv in %APPDATA%/Jarvis/gpu_speech, built + downloaded in the background on first use (CPU engine meanwhile),
+  because faster-whisper's `onnxruntime` overwrites the DirectML package. Worker talks over stdin/stdout; main process
+  does Silero VAD (silence never reaches the GPU, else Whisper says "you"), log-mel features and token decoding.
+  DirectML gotchas: use the split decoders (merged one = garbage), ORT_ENABLE_BASIC (ALL crashes), float32 I/O.
+  Any error/timeout (20 s) -> CPU engine for the rest of the session. Real run (RX 7900 XT): load 2 s, 0.3-0.6 s/command.
+  Not built: Groq cloud STT option (owner approved, skipped to save usage).
 - Single instance: named mutex; a second launch sets event `Local\JarvisShowSettings` -> running Jarvis opens settings.
 
 ## Stage A3 (PC tools) — `jarvis/pc/`, each module has `register(reg, cfg)`, loaded by `__main__.load_modules`
@@ -109,6 +117,8 @@
   (`WAKE_PREROLL`), "Jarvis" is a hint word, and `text.strip_wake_command` cuts the wake phrase and any chatter before it
   (first 8 words only, so a later "Jarvis" stays). 24/24 synthetic clips clean (3 voices). PTT keeps 0.24 s. Live mode unchanged.
   Peak level is still in "heard" lines; below about -30 dB = too quiet.
+  Owner's real test (2026-11-18): base.en heard all 15 real commands exactly after this fix. Remaining problems were
+  behaviour (Spotify volume, playlists, repeated confirm), not hearing. small.en: too slow, no better.
 
 ## Multiple AI providers (2026-11-17)
 - `core/providers.py`: adapters behind `generate(key, model, system, contents, tools) -> list[types.Part]`
