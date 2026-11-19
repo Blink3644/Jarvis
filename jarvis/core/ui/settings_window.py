@@ -599,7 +599,7 @@ class SettingsWindow:
         ctk.CTkOptionMenu(p, variable=v, values=list(config.STT_MODELS)).pack(anchor="w", padx=8)
         self._check(p, "keep_debug_clips", c.get("keep_debug_clips", False),
                     "Keep my last 20 voice commands for tuning (saved on this PC only, "
-                    "in %APPDATA%\Jarvis\debug_clips)")
+                    "in the Jarvis data folder, debug_clips)")
         ctk.CTkButton(p, text="Delete saved voice commands", width=220,
                       command=self._clear_debug_clips).pack(anchor="w", padx=8, pady=(2, 4))
 
