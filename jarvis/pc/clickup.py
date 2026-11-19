@@ -195,7 +195,7 @@ def make_tools(cfg, client_fn=None, clock=None):
                     return {"error": f"I couldn't find a ClickUp list called {list_name}."}
                 list_id, list_label = match["id"], match["name"]
             if not list_id:
-                return {"error": "No default ClickUp list is set. Pick one in settings, on the Integrations tab."}
+                return {"error": "No default ClickUp list is set. Pick one in settings, on the Integrations page."}
             body = {"name": name}
             if description:
                 body["description"] = description
