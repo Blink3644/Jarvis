@@ -175,6 +175,11 @@ class OpenAIAdapter:
                 "name": t["name"], "description": t.get("description", ""),
                 "parameters": _schema(t.get("parameters_json_schema"))}} for t in tools]
         data = _http(self.base + "/chat/completions", self._headers(key), body, timeout)
+        u = data.get("usage") or {}
+        if u:   # cached = reused from the provider's prompt cache (Groq: free of its per-minute limit)
+            log.info("%s tokens: prompt %s (cached %s), reply %s", model, u.get("prompt_tokens"),
+                     (u.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
+                     u.get("completion_tokens"))
         msg = ((data.get("choices") or [{}])[0].get("message") or {})
         parts = []
         if msg.get("content"):
