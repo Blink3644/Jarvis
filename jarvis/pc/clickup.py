@@ -238,6 +238,11 @@ def find_list(lists: list[dict], name: str):
         return next((li for li in lists if name in li["name"].lower()), None)
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("clickup", r"clickup|click\s+up|task|tasks|to-?do|todos|to\s+do|due|deadline|deadlines",
+            ["list_clickup_tasks", "create_clickup_task"])]
+
+
 def register(reg: Registry, cfg: dict) -> None:
     list_tasks, create_task, _ = make_tools(cfg)
     is_on = lambda: available(cfg)   # noqa: E731

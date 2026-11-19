@@ -46,6 +46,9 @@ _YES = re.compile(r"^\W*(yes|yeah|yep|yup|sure|ok|okay|do it|go ahead|confirm(ed
 _NO = re.compile(r"\b(no|nope|don't|do not|cancel|stop|wait|never ?mind)\b", re.I)
 
 
+_WAKE = re.compile(r"^\W*((hey|hi|ok|okay)\s+)?(jarvis|jervis)\b\W*", re.I)
+
+
 def is_affirmative(text: str) -> bool:
     text = re.sub(r"^\W*(hey\s+)?(jarvis|jervis)\W*", "", text or "", flags=re.I)
     return bool(_YES.search(text)) and not _NO.search(text)
@@ -68,6 +71,12 @@ class Registry:
         self.tainted = ""           # what outside data entered this turn ("" = none)
         self.pending: dict[str, tuple[str, dict, int]] = {}
         self._ids = itertools.count(1)
+        # Topics: a module groups its tools under a topic with the words that point to it, so a request
+        # only carries the tool descriptions it may need (fewer tokens). Tools in no topic are always sent.
+        self.topics: dict[str, tuple[Callable[[str], bool], list[str]]] = {}
+        self.topic_used: dict[str, int] = {}     # topic -> last turn one of its tools ran
+        self.turn_tools: set[str] | None = None  # None = send every tool this turn
+        self.send_all_topics: set[str] = set()
         self.register(Tool(
             name="confirm_action",
             description="Run an action that was waiting for the user's confirmation. Call this ONLY "
@@ -95,6 +104,7 @@ class Registry:
         """Called by the brain at the start of every user request."""
         self.turn += 1
         self.last_user_text = user_text or ""
+        self.turn_tools = self.pick_tools(self.last_user_text)
         self.tainted = ""
         self.conversation_over = False
         self.cancel.clear()
@@ -143,6 +153,42 @@ class Registry:
             raise ValueError(f"tool {tool.name!r} already registered")
         self.tools[tool.name] = tool
 
+    def add_topic(self, name: str, words, tools, send_all: bool = False) -> None:
+        """words: a regex (matched case-insensitively as whole words) or a function(text) -> bool.
+        send_all=True: when this topic matches, describe every tool (e.g. building a routine needs them all)."""
+        if isinstance(words, str):
+            rx = re.compile(r"\b(?:" + words + r")\b", re.I)
+            match = lambda text, rx=rx: bool(rx.search(text or ""))
+        else:
+            match = words
+        old = self.topics.get(name)
+        self.topics[name] = (match, (old[1] if old else []) + list(tools))
+        if send_all:
+            self.send_all_topics.add(name)
+
+    def _topic_hit(self, name: str, text: str) -> bool:
+        try:
+            return bool(self.topics[name][0](text))
+        except Exception:
+            log.exception("topic check failed for %s", name)
+            return True
+
+    def pick_tools(self, text: str) -> set[str] | None:
+        """The tools to describe to the AI for this request, or None for all of them.
+        All of them when nothing in the words points to a topic (unclear request: better safe);
+        otherwise the matching topics, the topics used in the last few turns (follow-ups like
+        'pick another one'), and every tool that belongs to no topic."""
+        text = _WAKE.sub("", text or "")
+        hit = {n for n in self.topics if self._topic_hit(n, text)}
+        if not hit or hit & self.send_all_topics:
+            return None
+        hit |= {n for n, t in self.topic_used.items() if n in self.topics and self.turn - t <= 3}
+        in_topic = {t for _, tools in self.topics.values() for t in tools}
+        picked = {t for t in self.tools if t not in in_topic}
+        for n in hit:
+            picked.update(self.topics[n][1])
+        return picked
+
     def add_context(self, provider: Callable[[], str]) -> None:
         self.context_providers.append(provider)
 
@@ -174,10 +220,12 @@ class Registry:
             log.exception("availability check failed for %s", tool.name)
             return False
 
-    def declarations(self) -> list[dict]:
+    def declarations(self, for_turn: bool = False) -> list[dict]:
+        """for_turn=True: only the tools picked for this request (see pick_tools)."""
+        keep = self.turn_tools if for_turn else None
         return [{"name": t.name, "description": t.description,
                  "parameters_json_schema": t.parameters}
-                for t in self.tools.values() if self.is_available(t)]
+                for t in self.tools.values() if self.is_available(t) and (keep is None or t.name in keep)]
 
     def call(self, name: str, args: dict | None, confirmed: bool = False) -> dict:
         tool = self.tools.get(name)
@@ -206,6 +254,9 @@ class Registry:
                     "instruction": f"Nothing has been done yet. Ask the user to confirm: "
                                    f"{self.describe(name, args)}? If they say yes, call "
                                    f"confirm_action with confirm_id {cid}."}
+        for topic, (_, tools) in self.topics.items():
+            if name in tools:
+                self.topic_used[topic] = self.turn
         try:
             result = tool.handler(**args)
             if tool.brings_data:

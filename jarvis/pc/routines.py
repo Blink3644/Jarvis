@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import threading
+import re
 import time
 
 from rapidfuzz import fuzz, process
@@ -118,6 +119,30 @@ def _wait_for_app(cfg: dict, name: str) -> None:
 
 
 MAX_WAIT_S = 60
+
+
+_ROUTINE_RX = re.compile(r"\b(routine|routines|mode)\b", re.I)
+
+
+def _mentions_routine(text: str) -> bool:
+    """'routine'/'mode', or every word of a saved routine's name (they're run by name alone)."""
+    if _ROUTINE_RX.search(text or ""):
+        return True
+    words = set(re.findall(r"[a-z0-9']+", (text or "").lower()))
+    for name in load_routines():
+        need = [w for w in re.findall(r"[a-z0-9']+", name.lower()) if len(w) > 2 and w != "the"]
+        if need and all(w in words for w in need):
+            return True
+    return False
+
+
+# Words that point to these tools; a request only describes the tools whose topic matches.
+# Building a routine needs to see every tool, so that topic sends them all.
+TOPICS = [
+    ("routines", _mentions_routine, ["run_routine", "list_routines", "delete_routine", "wait"]),
+    ("routine_edit", r"(create|make|new|build|set\s+up|add|edit|change|save|record)\b.*\broutine",
+     ["create_routine"], True),
+]
 
 
 def register(reg: Registry, cfg: dict, wait_for_app=None, sleep=time.sleep) -> None:

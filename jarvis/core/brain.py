@@ -201,8 +201,12 @@ class Brain:
             return False
         return not self.usage.exhausted(model)
 
+    def _tool_decls(self) -> list[dict]:
+        """Only the tools picked for this question (registry.pick_tools), unless that's turned off."""
+        return self.registry.declarations(for_turn=bool(self.cfg.get("smart_tools", True)))
+
     def _config(self, timeout_s: float | None = None, system: str | None = None) -> types.GenerateContentConfig:
-        decls = [types.FunctionDeclaration(**d) for d in self.registry.declarations()]
+        decls = [types.FunctionDeclaration(**d) for d in self._tool_decls()]
         return types.GenerateContentConfig(
             # Google's minimum deadline is 10 s
             http_options=types.HttpOptions(timeout=int(max(10, timeout_s) * 1000)) if timeout_s else None,
@@ -250,13 +254,18 @@ class Brain:
         return out
 
     def _call_slot(self, entry, model, contents, on_text, quick):
-        # Fixed instructions + tool list stay byte-identical between requests so prompt caches
-        # can reuse them (Groq: cached tokens don't count toward its per-minute limit; Gemini:
-        # implicit caching). The time/notes/game go in a [Context] note before the latest question.
+        # The time/notes/game go in a [Context] note before the latest question, so the fixed
+        # instructions stay identical between requests (helps providers that cache the start of a
+        # request). Only the tools picked for this question are described (smart_tools); earlier
+        # calls to tools not described now are passed on as text notes so no API rejects them.
         system, note = split_prompt(self.cfg, self.registry.extra_context(), self.memory)
+        tools = self._tool_decls()
+        sent_names = {t["name"] for t in tools}
         if entry.get("kind") == "gemini":
             timeout = self.cfg.get("main_timeout_s", 10) if quick else None
-            sent = _with_context_note(_for_gemini(contents, self._foreign_calls), note)
+            foreign = self._foreign_calls
+            sent = _with_context_note(_calls_as_text(
+                contents, lambda x: x.id in foreign or x.name not in sent_names), note)
             parts = self._stream(self._get_client(), model, sent, on_text, timeout, system)
             if self._last_usage:
                 log.info("%s tokens: prompt %s (cached %s), reply %s", model, *self._last_usage)
@@ -264,10 +273,10 @@ class Brain:
         api_key = self.get_provider_key(entry["id"])
         if not api_key and not providers.PRESETS.get(entry.get("preset"), {}).get("no_key"):
             raise FriendlyError(f"I don't have an API key for {entry['name']} yet.")
-        tools = self.registry.declarations()
         timeout = self.cfg.get("main_timeout_s", 10) if quick else 30
+        sent = _calls_as_text(contents, lambda x: x.name not in sent_names)
         parts = self.adapter_factory(entry).generate(api_key, model, system,
-                                                     _with_context_note(contents, note), tools,
+                                                     _with_context_note(sent, note), tools,
                                                      timeout=max(10, timeout))
         for p in parts:                 # remember these so Gemini gets them as text later
             if p.function_call:
@@ -428,22 +437,27 @@ def _for_gemini(contents: list[types.Content], foreign: set[str]) -> list[types.
     Gemini rejects those ("Function call is missing a thought_signature"). Turn them and
     their results (matched by call id) into plain text notes so Gemini can take over
     mid-conversation. Gemini's own calls are left exactly as they were."""
-    if not foreign:
-        return contents
+    return _calls_as_text(contents, lambda x: x.id in foreign)
+
+
+def _calls_as_text(contents: list[types.Content], convert) -> list[types.Content]:
+    """Replace the tool calls and results for which convert(function_call_or_response) is true
+    with plain text notes (same information, no tool structure). For the request only."""
+    def hit(x):
+        return bool(x) and convert(x)
     out: list[types.Content] = []
     for c in contents:
         parts = list(c.parts or [])
-        if not any((p.function_call and p.function_call.id in foreign)
-                   or (p.function_response and p.function_response.id in foreign) for p in parts):
+        if not any(hit(p.function_call) or hit(p.function_response) for p in parts):
             out.append(c)
             continue
         new = []
         for p in parts:
             fc, fr = p.function_call, p.function_response
-            if fc and fc.id in foreign:
+            if hit(fc):
                 args = json.dumps(dict(fc.args or {}), default=str)
                 new.append(types.Part(text=f"[I called the tool {fc.name} with {args}]"))
-            elif fr and fr.id in foreign:
+            elif hit(fr):
                 res = json.dumps(fr.response, default=str)
                 new.append(types.Part(text=f"[The tool {fr.name} returned: {res}]"))
             else:

@@ -73,6 +73,10 @@ def set_clipboard(text: str, tries: int = 10) -> None:
             u32.DestroyWindow(hwnd)
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("clipboard", r"copy|copied|clipboard|paste", ["copy_to_clipboard"])]
+
+
 def register(reg: Registry, cfg: dict, setter=None) -> None:
     setter = setter or set_clipboard
 

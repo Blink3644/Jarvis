@@ -157,6 +157,12 @@ class TimerManager:
             self._cv.notify_all()
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("timers", r"timer|timers|alarm|alarms|remind|reminder|wake\s+me|countdown|minutes?|seconds?|hours?|"
+                     r"mins?|secs?|o'?clock|am|pm|cancel|stop", ["set_timer", "set_alarm", "cancel_timer",
+                                                               "list_timers"])]
+
+
 def register(reg: Registry, cfg: dict, clock=time.time, use_thread: bool = True) -> TimerManager:
     mgr = TimerManager(lambda text: reg.announce(text), clock=clock, use_thread=use_thread)
 

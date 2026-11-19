@@ -140,9 +140,17 @@
   `_with_context_note` puts before the latest question, for that request only (not saved in history). So
   instructions + tools + earlier turns stay identical and can be cached. Groq: cached tokens don't count
   toward its per-minute limit (docs). Gemini free tier limits requests, not tokens, so there it's only a
-  possible speed-up. Log line "<model> tokens: prompt N (cached M)" for both. NOT yet confirmed live.
-- Tool calls made by non-Gemini providers are tracked by id (`Brain._foreign_calls`) and sent to Gemini as
-  text notes (`_for_gemini`); otherwise Gemini 400s with "missing a thought_signature" when it takes over.
+  possible speed-up. Log line "<model> tokens: prompt N (cached M)". Checked live 2026-11-18: Groq's
+  free account reports no cached tokens at all (no prompt_tokens_details), so caching doesn't help there.
+- Smart tool list (`smart_tools`, default on, checkbox on the settings main page): each PC module has a
+  `TOPICS` list (topic, words regex or function, tool names, optional send_all), registered by
+  `__main__.load_modules`. `Registry.pick_tools` sends only matching topics + topics used in the last 3
+  turns + tools in no topic (confirm_action, end_conversation). No topic matched, or "create a routine"
+  (send_all) → every tool. Cuts tool text from ~3,000 to ~200–900 tokens for most questions. Live mode
+  always gets every tool. Tests: `tests/test_tool_picking.py`.
+- Earlier tool calls/results for tools not sent this request, and calls made by non-Gemini providers
+  (tracked by id, `Brain._foreign_calls`), are sent as text notes (`_calls_as_text`); otherwise the API
+  rejects unknown tool names / Gemini 400s with "missing a thought_signature".
 - Settings: "AI providers" tab (add preset, key, Test key = lists models, models comma list, Up/Down,
   on/off, Remove deletes key). Capabilities per preset: images on for OpenAI/Anthropic/OpenRouter,
   audio only Gemini (flags `images`/`audio` in config if a model differs).

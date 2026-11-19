@@ -147,6 +147,11 @@ def make_auto_look(cfg):
     return provider
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("screen", r"screen|look|looking|see|seeing|showing|shown|window|this|that|here|boss|setting|"
+                     r"settings|error|message|read|says|beat|puzzle|map|menu|what's\s+this", ["look_at_screen"])]
+
+
 def register(reg, cfg) -> None:
     reg.register(Tool(
         name="look_at_screen", side_effect=False, brings_data=True,

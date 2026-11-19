@@ -153,6 +153,10 @@ def save_replay(port, password, connect=None) -> dict:
     return out
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("clip", r"clip|clipped|replay|record|recording|save\s+that|obs", ["clip_that"])]
+
+
 def register(reg: Registry, cfg: dict, connect=None) -> None:
     def clip_that() -> dict:
         try:

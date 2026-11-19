@@ -39,6 +39,7 @@ DEFAULTS = {
     "stt_gpu": False,                 # opt-in: Whisper large-v3-turbo on the graphics card (DirectML)
     "keep_debug_clips": False,        # opt-in: keep the last 20 voice commands (WAV + text) for tuning
     "main_timeout_s": 10,
+    "smart_tools": True,              # send only the tools whose topic fits the question (fewer tokens)
     "home_city": "",                  # for weather, e.g. "Leeds"
     "app_aliases": {},                # spoken name -> app name or path, e.g. {"browser": "Google Chrome"}
     "game_list": [],                  # extra exe names that count as games, e.g. ["eldenring.exe"]

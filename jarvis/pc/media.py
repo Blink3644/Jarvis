@@ -85,6 +85,15 @@ def media_control(action: str) -> dict:
     return {"done": action}
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [
+    ("volume", r"volume|louder|quieter|softer|mute|muted|unmute|sound|loud|quiet|turn\s+(it|that|this|the\s+\w+)?"
+               r"\s*(up|down)|crank|lower|raise", ["get_volume", "set_volume", "change_volume", "set_mute"]),
+    ("music", r"play|playing|pause|resume|stop|skip|next|previous|back|song|songs|track|music|tune|tunes",
+     ["media_control"]),
+]
+
+
 def register(reg, cfg: dict) -> None:
     def obj(props, req=()):
         return {"type": "object", "properties": props, "required": list(req)}

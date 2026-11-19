@@ -109,6 +109,11 @@ def make_get_weather(cfg: dict):
     return get_weather
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("weather", r"weather|rain|raining|rainy|sun|sunny|temperature|degrees|forecast|cold|hot|warm|snow|"
+                      r"snowing|wind|windy|umbrella|jacket|coat|outside|storm|cloudy|humid", ["get_weather"])]
+
+
 def register(reg: Registry, cfg: dict) -> None:
     reg.register(Tool(
         name="get_weather", side_effect=False,

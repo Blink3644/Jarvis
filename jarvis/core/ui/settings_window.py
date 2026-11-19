@@ -118,7 +118,7 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
         v = _num(f["live_idle_seconds"], "Live mode idle seconds", 5, 300, float, errors)
         if v is not None:
             cfg["live_idle_seconds"] = v
-    for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows", "live_mode",
+    for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows", "live_mode", "smart_tools",
               "keep_debug_clips", "stt_gpu",
               "calendar_enabled", "clickup_enabled"):
         if k in f:
@@ -387,6 +387,9 @@ class SettingsWindow:
                       state="normal" if self.h.get("test_key") else "disabled").pack(side="left", padx=6)
         self._entry(p, "model_main", c["model_main"], "Main model")
         self._entry(p, "model_fallback", c["model_fallback"], "Backup model (used when the main one runs out)")
+        self._check(p, "smart_tools", c.get("smart_tools", True),
+                    "Send the AI only the tools that fit each question (uses fewer tokens; "
+                    "turn off if Jarvis says it can't do something it normally can)")
         self._menu(p, "personality", PERSONALITY_LABELS, c["personality"], "Personality")
         self._entry(p, "user_title", c["user_title"], "What Jarvis calls you (for example sir, or your name)", width=200)
         self._menu(p, "reply_mode", REPLY_LABELS, c["reply_mode"], "How Jarvis replies")

@@ -287,6 +287,11 @@ def close_app(cfg: dict, name: str, wait: float = 4.0) -> dict:
 
 
 # ---------- registration ----------
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("apps", r"open|launch|start|run|load|close|quit|exit|kill|shut|app|apps|application|program|game|"
+                   r"games|steam|epic|discord|chrome|browser|firefox|edge", ["open_app", "close_app"])]
+
+
 def register(reg, cfg: dict) -> None:
     reg.register(Tool(
         name="open_app",

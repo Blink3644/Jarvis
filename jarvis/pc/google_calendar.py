@@ -262,6 +262,13 @@ def _confirm_add(args):
     return f'add "{args.get("title", "")}" to your calendar on {when_s}'
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("calendar", r"calendar|event|events|meeting|meetings|appointment|appointments|schedule|"
+                       r"today|tomorrow|tonight|week|weekend|busy|free|plans|planned|agenda|monday|tuesday|"
+                       r"wednesday|thursday|friday|saturday|sunday|book|add", ["get_calendar_events",
+                                                                              "add_calendar_event"])]
+
+
 def register(reg: Registry, cfg: dict) -> None:
     get_events, add_event, _ = make_tools(cfg)
     is_on = lambda: available(cfg)   # noqa: E731

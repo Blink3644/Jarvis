@@ -95,11 +95,16 @@ def load_modules(cfg):
     try:
         from jarvis.pc import basic_tools
         basic_tools.register(registry)
+        for topic in basic_tools.TOPICS:
+            registry.add_topic(*topic)
     except Exception:
         log.exception("pc module basic_tools failed to load")
     for name in PC_MODULES:
         try:
-            importlib.import_module(f"jarvis.pc.{name}").register(registry, cfg)
+            mod = importlib.import_module(f"jarvis.pc.{name}")
+            mod.register(registry, cfg)
+            for topic in getattr(mod, "TOPICS", ()):   # words that point to its tools (see pick_tools)
+                registry.add_topic(*topic)
         except Exception:
             log.exception("pc module %s failed to load", name)
 

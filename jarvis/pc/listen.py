@@ -125,6 +125,11 @@ def make_tool(reg, cfg, recorder=record):
     return listen_to_audio
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("audio", r"listen|listening|hear|heard|song|what\s+song|identify|said|saying|say|summari[sz]e|"
+                    r"audio|sound|npc|voice|lyrics", ["listen_to_audio"])]
+
+
 def register(reg, cfg) -> None:
     reg.register(Tool(
         name="listen_to_audio", side_effect=False, brings_data=True,

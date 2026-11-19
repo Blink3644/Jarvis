@@ -149,6 +149,11 @@ def _find(ref) -> list[dict]:
     return [n for sc, n in scored[:1] if sc >= 80]
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("notes", r"remember|remembered|note|notes|forget|forgot|told\s+you|ask(ed)?\s+you|memo|password|"
+                    r"pin|where\s+(is|are|did)|save\s+that", ["remember_note", "list_notes", "forget_note"])]
+
+
 def register(reg: Registry, cfg: dict) -> None:
     def remember_note(text: str) -> dict:
         if not (text or "").strip():

@@ -62,6 +62,12 @@ def take_screenshot(folder: str | Path | None = None) -> dict:
     return {"saved": str(path)}
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("power", r"lock|sleep|shut\s*down|shutdown|restart|reboot|power|turn\s+off|log\s*off|screenshot|"
+                    r"screen\s*shot|computer|pc", ["lock_pc", "sleep_pc", "shutdown_pc", "restart_pc",
+                                                  "take_screenshot"])]
+
+
 def register(reg, cfg: dict) -> None:
     def T(**kw):
         reg.register(Tool(module="pc", visual=False, **kw))

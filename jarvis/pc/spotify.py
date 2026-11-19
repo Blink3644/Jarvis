@@ -412,6 +412,14 @@ def make_tools(cfg, client_fn=None, open_spotify=None, sleep=time.sleep, wait_s:
             "spotify_shuffle": spotify_shuffle, "spotify_repeat": spotify_repeat}
 
 
+# Words that point to these tools; a request only describes the tools whose topic matches.
+TOPICS = [("music", r"spotify|play|playing|pause|resume|skip|next|previous|song|songs|track|tracks|music|tune|"
+                    r"tunes|playlist|playlists|album|artist|band|queue|shuffle|repeat|loop|like|liked|save|listen|"
+                    r"listening|genre|vibe|vibes|funky|chill|jazz|rock|pop|rap|lofi|beat|beats",
+            ["spotify_play", "spotify_queue", "spotify_shuffle", "spotify_repeat", "spotify_like_current",
+             "spotify_now_playing"])]
+
+
 def register(reg: Registry, cfg: dict) -> None:
     t = make_tools(cfg)
     is_on = lambda: available(cfg)   # noqa: E731
