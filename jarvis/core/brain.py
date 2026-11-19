@@ -101,6 +101,7 @@ class Brain:
         self.on_backup = False
         self._foreign_calls: set[str] = set()   # ids of tool calls made by non-Gemini providers
         self._n_foreign = 0
+        self._last_usage = None
         self._client = None
         self._client_key = None
         self.memory = self.history.load_summaries()
@@ -200,22 +201,28 @@ class Brain:
             return False
         return not self.usage.exhausted(model)
 
-    def _config(self, timeout_s: float | None = None) -> types.GenerateContentConfig:
+    def _config(self, timeout_s: float | None = None, system: str | None = None) -> types.GenerateContentConfig:
         decls = [types.FunctionDeclaration(**d) for d in self.registry.declarations()]
         return types.GenerateContentConfig(
             # Google's minimum deadline is 10 s
             http_options=types.HttpOptions(timeout=int(max(10, timeout_s) * 1000)) if timeout_s else None,
-            system_instruction=system_prompt(self.cfg, self.registry.extra_context(), self.memory),
+            system_instruction=system if system is not None else
+            system_prompt(self.cfg, self.registry.extra_context(), self.memory),
             tools=[types.Tool(function_declarations=decls)] if decls else None,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
-    def _stream(self, client, model, contents, on_text, timeout=None) -> list[types.Part]:
+    def _stream(self, client, model, contents, on_text, timeout=None, system=None) -> list[types.Part]:
         parts: list[types.Part] = []
+        self._last_usage = None
         # An overloaded top choice can take 20+ s just to fail; the caller passes a short
         # timeout when there's a backup to move on to.
         for chunk in client.models.generate_content_stream(
-                model=model, contents=contents, config=self._config(timeout)):
+                model=model, contents=contents, config=self._config(timeout, system)):
+            um = getattr(chunk, "usage_metadata", None)
+            if um is not None and getattr(um, "prompt_token_count", None):
+                self._last_usage = (um.prompt_token_count, um.cached_content_token_count or 0,
+                                    um.candidates_token_count)
             for cand in (chunk.candidates or [])[:1]:
                 for p in (cand.content.parts if cand.content and cand.content.parts else []):
                     if p.text and not p.thought and on_text:
@@ -243,17 +250,21 @@ class Brain:
         return out
 
     def _call_slot(self, entry, model, contents, on_text, quick):
+        # Fixed instructions + tool list stay byte-identical between requests so prompt caches
+        # can reuse them (Groq: cached tokens don't count toward its per-minute limit; Gemini:
+        # implicit caching). The time/notes/game go in a [Context] note before the latest question.
+        system, note = split_prompt(self.cfg, self.registry.extra_context(), self.memory)
         if entry.get("kind") == "gemini":
             timeout = self.cfg.get("main_timeout_s", 10) if quick else None
-            return self._stream(self._get_client(), model, _for_gemini(contents, self._foreign_calls),
-                                on_text, timeout)
+            sent = _with_context_note(_for_gemini(contents, self._foreign_calls), note)
+            parts = self._stream(self._get_client(), model, sent, on_text, timeout, system)
+            if self._last_usage:
+                log.info("%s tokens: prompt %s (cached %s), reply %s", model, *self._last_usage)
+            return parts
         api_key = self.get_provider_key(entry["id"])
         if not api_key and not providers.PRESETS.get(entry.get("preset"), {}).get("no_key"):
             raise FriendlyError(f"I don't have an API key for {entry['name']} yet.")
         tools = self.registry.declarations()
-        # Fixed instructions + tool list stay byte-identical between requests so Groq's prompt
-        # cache can reuse them (cached tokens don't count toward its per-minute limit).
-        system, note = split_prompt(self.cfg, self.registry.extra_context(), self.memory)
         timeout = self.cfg.get("main_timeout_s", 10) if quick else 30
         parts = self.adapter_factory(entry).generate(api_key, model, system,
                                                      _with_context_note(contents, note), tools,

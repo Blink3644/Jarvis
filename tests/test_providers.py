@@ -313,13 +313,16 @@ def test_other_providers_get_identical_instructions_and_a_context_note():
     assert not any("[Context]" in (p.text or "") for p in b.conv.contents()[0].parts)
 
 
-def test_gemini_still_gets_everything_in_system_instruction():
+def test_gemini_gets_fixed_instructions_and_a_context_note():
     b, fa, client, _ = make_groq_first([(MAIN, text_chunks("hi"))], [("groq", groq_tpm("30s")),
                                                                       ("groq", groq_tpm("30s"))])
     b.ask("hi")
     cfgobj = client.models.calls[0][2]
-    assert "current local date and time" in cfgobj.system_instruction
-    assert client.models.calls[0][1][-1].parts[0].text == "hi"
+    assert "current local date and time" not in cfgobj.system_instruction   # fixed, cacheable
+    latest = client.models.calls[0][1][-1].parts
+    assert latest[0].text.startswith("[Context]") and "current local date and time" in latest[0].text
+    assert latest[1].text == "hi"
+    assert not any("[Context]" in (p.text or "") for p in b.conv.contents()[0].parts)
 
 
 def test_openai_adapter_logs_cached_tokens(caplog):

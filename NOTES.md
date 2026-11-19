@@ -125,12 +125,12 @@
 - Per-minute limits: the provider's "try again in Xs" hint (`retry_after`) is used; <= 3 s is waited out,
   otherwise the slot is blocked for that long (max 60 s). Groq free tier = 8,000 tokens/min per model and
   a Jarvis request is ~3,500 tokens (~3,000 = the 40 tool declarations, ~490 = instructions).
-- Prompt caching (non-Gemini): `personality.split_prompt` gives fixed instructions (no clock) + a
-  `[Context]` note (time, routines, notes, game) that `_with_context_note` puts before the latest question,
-  for that request only (not saved in history). So instructions + tools + earlier turns stay identical and
-  Groq can cache them (docs: cached tokens don't count toward its limits). Gemini still gets everything in
-  `system_instruction`. Log line "<model> tokens: prompt N (cached M)" shows if caching works. NOT yet
-  confirmed live on Groq.
+- Prompt caching (all providers in `Brain._call_slot`; Live mode unchanged): `personality.split_prompt`
+  gives fixed instructions (no clock) + a `[Context]` note (time, routines, notes, game) that
+  `_with_context_note` puts before the latest question, for that request only (not saved in history). So
+  instructions + tools + earlier turns stay identical and can be cached. Groq: cached tokens don't count
+  toward its per-minute limit (docs). Gemini free tier limits requests, not tokens, so there it's only a
+  possible speed-up. Log line "<model> tokens: prompt N (cached M)" for both. NOT yet confirmed live.
 - Tool calls made by non-Gemini providers are tracked by id (`Brain._foreign_calls`) and sent to Gemini as
   text notes (`_for_gemini`); otherwise Gemini 400s with "missing a thought_signature" when it takes over.
 - Settings: "AI providers" tab (add preset, key, Test key = lists models, models comma list, Up/Down,
