@@ -265,7 +265,7 @@ class _Rows:
         if b:
             eb.insert(0, b)
         item = (row, ea, eb)
-        ctk.CTkButton(row, text="X", width=28, command=lambda: self._remove(item)).pack(side="left")
+        ctk.CTkButton(row, text="Remove", width=70, command=lambda: self._remove(item)).pack(side="left")
         self.rows.append(item)
 
     def _remove(self, item):
@@ -450,13 +450,13 @@ class SettingsWindow:
             top.pack(fill="x", padx=6, pady=(4, 0))
             row = {"entry": e, "enabled": ctk.BooleanVar(value=e.get("enabled", True))}
             ctk.CTkCheckBox(top, text=f"{i + 1}. {e['name']}", variable=row["enabled"]).pack(side="left")
-            ctk.CTkButton(top, text="Up", width=44, command=lambda i=i: self._prov_move(i, -1)).pack(side="left", padx=2)
-            ctk.CTkButton(top, text="Down", width=54, command=lambda i=i: self._prov_move(i, 1)).pack(side="left", padx=2)
+            ctk.CTkButton(top, text="Move up", width=80, command=lambda i=i: self._prov_move(i, -1)).pack(side="left", padx=2)
+            ctk.CTkButton(top, text="Move down", width=90, command=lambda i=i: self._prov_move(i, 1)).pack(side="left", padx=2)
             if e.get("kind") != "gemini":
                 ctk.CTkButton(top, text="Remove", width=70, command=lambda i=i: self._prov_remove(i)).pack(side="left", padx=2)
                 preset = providers.PRESETS.get(e.get("preset"), {})
                 caps = [c for c, on in (("pictures", e.get("images")), ("audio", e.get("audio"))) if on]
-                ctk.CTkLabel(top, text="can take: " + (", ".join(caps) or "text only")).pack(side="left", padx=8)
+                ctk.CTkLabel(top, text="Understands: " + ", ".join(["text"] + caps)).pack(side="left", padx=8)
                 if not preset.get("no_key"):
                     have = secrets.get_provider_key(e["id"])
                     r = ctk.CTkFrame(box, fg_color="transparent")
@@ -476,12 +476,12 @@ class SettingsWindow:
                     ctk.CTkLabel(box, text="Web address (base URL), e.g. https://example.com/v1").pack(anchor="w", padx=6)
                     ctk.CTkEntry(box, textvariable=row["base_url"], width=360).pack(anchor="w", padx=6)
                 row["models"] = ctk.StringVar(value=", ".join(e.get("models") or []))
-                ctk.CTkLabel(box, text="Model(s), best first, separated by commas. Test key lists the names.").pack(anchor="w", padx=6)
+                ctk.CTkLabel(box, text="Models to use, best first, separated by commas. Click Test key to see the names you can use.").pack(anchor="w", padx=6)
                 ctk.CTkEntry(box, textvariable=row["models"], width=420).pack(anchor="w", padx=6, pady=(0, 4))
                 row["status"] = ctk.CTkLabel(box, text="", wraplength=600, justify="left")
                 row["status"].pack(anchor="w", padx=6)
             else:
-                ctk.CTkLabel(top, text="models and key: General tab").pack(side="left", padx=8)
+                ctk.CTkLabel(top, text="Set its key and models on the General tab.").pack(side="left", padx=8)
             self.prov_rows.append(row)
 
     def _prov_add(self, preset):
@@ -790,7 +790,7 @@ class SettingsWindow:
             ctk.CTkLabel(row, text=f"{name}: {steps}", anchor="w", justify="left",
                          wraplength=420).pack(side="left", padx=4)
             v = ctk.BooleanVar(value=bool(r.get("skip_confirm")))
-            ctk.CTkCheckBox(row, text="don't ask", variable=v, width=90,
+            ctk.CTkCheckBox(row, text="Run without asking", variable=v, width=150,
                             command=lambda n=name, v=v: self._skip(n, v)).pack(side="right", padx=4)
             ctk.CTkButton(row, text="Delete", width=56, fg_color="firebrick",
                           command=lambda n=name: self._routine_delete(n)).pack(side="right")
@@ -1099,11 +1099,11 @@ class SettingsWindow:
 
     def _minecraft(self, tab):
         ctk = self.ctk
-        self._label(tab, "Coming in Part B", bold=True)
+        self._label(tab, "Minecraft mode isn't built yet. These options will switch on in a later version.", bold=True)
         for text in ("Minecraft mode", "Waypoints"):
             ctk.CTkSwitch(tab, text=text, state="disabled").pack(anchor="w", padx=8, pady=4)
         self._label(tab, "Minecraft folder (override)")
-        ctk.CTkEntry(tab, state="disabled", width=300, placeholder_text="Coming in Part B").pack(anchor="w", padx=8)
+        ctk.CTkEntry(tab, state="disabled", width=300, placeholder_text="Not available yet").pack(anchor="w", padx=8)
 
     def _about(self, tab):
         try:
