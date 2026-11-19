@@ -220,7 +220,7 @@ class App:
             return
         if info:
             self.update_info = info
-            msg = f"Jarvis version {info.version} is available. Open settings, About tab, to update."
+            msg = f"Jarvis version {info.version} is available. Open settings, About page, to update."
             self.ui.notice(msg)
             self.tray.warn(msg)
 
@@ -340,9 +340,9 @@ class App:
                 from jarvis.pc import profile
                 return profile.load_facts()
 
-            def profile_update(self, fact_id, text):
+            def profile_update(self, fact_id, text, *game):    # game: name, or "" for all games
                 from jarvis.pc import profile
-                return profile.update_fact(fact_id, text)
+                return profile.update_fact(fact_id, text, *game)
 
             def profile_delete(self, fact_id):
                 from jarvis.pc import profile

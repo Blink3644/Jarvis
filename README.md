@@ -46,11 +46,11 @@ Double-click **setup.bat** in that folder. It needs **Python 3.12**:
 1. Start **Jarvis** from the Start Menu, or double-click **run.bat**.
 2. A small icon appears in the tray, near the clock. You may need to click **^** to see it.
 3. Right-click the icon and choose **Open settings**. Then:
-   - **General** tab:
-     - Paste your key, then click **Test key**.
-     - Set what Jarvis calls you ("sir" by default) and how replies appear (spoken, text, or both).
-   - **Voice** tab: pick your **microphone**. Jarvis only ever listens to this one device, so game sound and Discord can't trigger it.
-   - **PC** tab: set your home city for the weather.
+   - **AI & usage** page (in the list on the left): paste your key, then click **Test key**.
+   - **General** page: set what Jarvis calls you ("sir" by default) and how replies appear (spoken, text, or both).
+   - **Voice** page: pick your **microphone**. Jarvis only ever listens to this one device, so game sound and Discord can't trigger it.
+   - **PC** page: set your home city for the weather.
+   - Not sure where something is? Type it in the **Search settings** box at the top left. Click a **?** for a short explanation.
 4. Click **Save**. Then say **"Hey Jarvis, what time is it?"**
 
 Windows SmartScreen or your antivirus may warn about a `.bat` file from the internet. That's normal for small free projects. Click **More info → Run anyway** only if you got Jarvis from someone you trust.

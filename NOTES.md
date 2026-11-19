@@ -29,11 +29,21 @@
   drops secret-looking facts and instruction-like strings; facts reach prompts wrapped as data, only those that fit
   the question. Tools: `what_you_know_about_me` (read-only), `forget_about_me` (destructive, confirm; "all" works).
   core stays independent: profile.py sets `registry.learner`. Not yet tried by voice on a real PC.
+- Per-game facts: a fact may have `"game"` (no key = all games, so old profile.json files work). The profile
+  context records the focused game per question (`note_turn`; `set_game_provider`, which register() points at
+  `games.current_game`, same idea as notes' scope provider), so a fact is tagged with the game focused when the
+  user said it, not when learning runs. The extraction prompt marks those lines `[while playing X]`; the model
+  returns `{"fact", "game"}` objects for game-only facts, and a game it wasn't given is dropped. Context and
+  `relevant_facts(query, game=)` send global facts plus the focused game's (small score bonus), never another
+  game's; duplicates are checked per game. `what_you_know_about_me(game=)` takes 'current', a name, or
+  'all games'. Not yet tried with a real game focused.
 - Settings > "What Jarvis knows" tab: lists facts with Save (edit) / Delete, "Forget everything" (Are-you-sure
   dialog), and shows whether Learn about me is on (follows the General tick box live). Changes save at once.
   It reaches pc code only through app.py hooks `profile_facts/profile_update/profile_delete/profile_forget_all`.
-  `profile.update_fact(id, text)` applies the add_facts rules (`_clean`, min 6 chars, refuses `looks_secret`,
-  cut to `MAX_FACT_LEN`) and returns None or a plain reason. UI only: no voice tool changes it.
+  Each row has a game box ("All games" or a game name; a new name can be typed); general facts list first,
+  then each game's together. `profile.update_fact(id, text, game=<keep>)` applies the add_facts rules
+  (`_clean`, min 6 chars, refuses `looks_secret`, cut to `MAX_FACT_LEN`) and returns None or a plain reason;
+  game "" means all games. UI only: no voice tool changes it.
   Not yet clicked through on a real PC.
 
 ## "Clip that" (2026-11-18) — `jarvis/pc/obs_clip.py`, confirmed with real OBS 2026-11-18
@@ -111,6 +121,15 @@
 ## Stage A4 (UI) — `jarvis/core/ui/`, run `python -m jarvis --gui` (`run_gui_test.bat`, pythonw)
 - app.py ties it together: overlay.py owns the only Tk thread; settings_window.py (customtkinter) is built on it via
   `overlay.call(fn)`; tray.py (pystray) own thread; FrontEnd forwards voice status to panel + tray.
+- Settings layout (2026-11-19, branch `settings-layout`): 900x620 window, left sidebar of pages (`PAGES`: General,
+  AI & usage, AI providers, Voice, PC, Privacy & memory, Notes, Routines, Integrations, About, Minecraft last and
+  greyed). Each page = its own builder method (`_general`, `_ai_usage`, `_privacy`, ...); `show_page(name)`.
+  Privacy & memory holds history + Clear history, auto-look, never-screenshot, Learn about me and the "What Jarvis
+  knows" list (`_knows`, now a plain frame inside the scrolling page). Config keys and `self.vars` names unchanged.
+  Search: `_label`/`_check` add (page, text) to `search_index` while building (coloured notes/warnings are skipped);
+  pure `find_settings(index, query)` = every query word in the label. Typing greys pages without a hit, lights up
+  matching labels and jumps to the first hit's page (stays put if the current page has one). Help: `HELP_TEXTS`
+  dict + `_help(row, key)` "?" button (messagebox); `_menu`/`_check` take `help=`.
 - Settings hooks: test_key (models.get, no quota; keep the Client object alive or the SDK closes it), test_wake,
   mic_level (va.tap), reopen_mic, apply (updates the shared cfg dict in place), clear_history, check_usage, tool_names.
 - Mute = `va.muted` (frames dropped, PTT ignored). Long answers in reply mode "both": speak `spoken_sentence_limit`
