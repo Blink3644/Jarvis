@@ -35,6 +35,21 @@ class FrontEnd:
             self.tray.warn(msg)
 
 
+def brief_sources(cfg):
+    """(weather_fn, extras) for the Daily brief: used at startup and by the morning brief."""
+    def weather_fn(city):
+        from jarvis.pc.weather import make_get_weather
+        return weather_line(make_get_weather(cfg), city)
+    extras = []
+    for mod in ("google_calendar", "clickup"):      # optional; '' when not set up
+        try:
+            m = importlib.import_module(f"jarvis.pc.{mod}")
+            extras.append(lambda m=m: m.brief_line(cfg))
+        except Exception:
+            log.exception("brief source %s unavailable", mod)
+    return weather_fn, extras
+
+
 def weather_line(get_weather, city):
     """One short sentence for the daily brief, from weather.get_weather's dict."""
     w = get_weather(city)
@@ -186,17 +201,8 @@ class App:
         sp.on_speaking = on_speaking
 
     def _greet(self):
-        def weather_fn(city):
-            from jarvis.pc.weather import make_get_weather
-            return weather_line(make_get_weather(self.cfg), city)
         try:
-            extras = []
-            for mod in ("google_calendar", "clickup"):      # optional; '' when not set up
-                try:
-                    m = importlib.import_module(f"jarvis.pc.{mod}")
-                    extras.append(lambda m=m: m.brief_line(self.cfg))
-                except Exception:
-                    log.exception("brief source %s unavailable", mod)
+            weather_fn, extras = brief_sources(self.cfg)
             text = greeting.startup_text(self.cfg, datetime.datetime.now(), weather_fn, extras)
         except Exception:
             log.exception("greeting failed")
