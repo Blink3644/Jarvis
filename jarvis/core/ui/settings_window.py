@@ -119,7 +119,7 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
         if v is not None:
             cfg["live_idle_seconds"] = v
     for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows", "live_mode",
-              "keep_debug_clips",
+              "keep_debug_clips", "stt_gpu",
               "calendar_enabled", "clickup_enabled"):
         if k in f:
             cfg[k] = bool(f[k])
@@ -597,6 +597,9 @@ class SettingsWindow:
                        "first use downloads ~480 MB; restart Jarvis after changing)")
         v = self._var("stt_model", c.get("stt_model", "base.en"))
         ctk.CTkOptionMenu(p, variable=v, values=list(config.STT_MODELS)).pack(anchor="w", padx=8)
+        self._check(p, "stt_gpu", c.get("stt_gpu", False),
+                    "Use graphics card for speech (more accurate large model; AMD, Intel or NVIDIA; "
+                    "first use downloads ~2 GB in the background; restart Jarvis after changing)")
         self._check(p, "keep_debug_clips", c.get("keep_debug_clips", False),
                     "Keep my last 20 voice commands for tuning (saved on this PC only, "
                     "in the Jarvis data folder, debug_clips)")

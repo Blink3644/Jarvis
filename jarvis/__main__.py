@@ -152,8 +152,12 @@ def start_voice(cfg, brain, ui):
     if fell_back:
         print("Your custom wake word couldn't be loaded, so I'm using \"Hey Jarvis\" for now.")
     from .core.voice.live import make_session_factory
+    stt = Transcriber(cfg.get("stt_model", "base.en"))
+    if cfg.get("stt_gpu"):
+        from .core.voice.gpu_stt import GpuTranscriber
+        stt = GpuTranscriber(cpu=stt)      # CPU engine answers until the GPU is ready, and after any GPU error
     va = VoiceAssistant(cfg, brain, registry, mic=Mic(cfg), wake=wake,
-                        stt=Transcriber(cfg.get("stt_model", "base.en")), speaker=Speaker(cfg),
+                        stt=stt, speaker=Speaker(cfg),
                         vad=Vad(3), ui=ui, ptt=ptt, sounds=SOUNDS,
                         live_factory=make_session_factory(cfg, registry, brain))
     va.start()
