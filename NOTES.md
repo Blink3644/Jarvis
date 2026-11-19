@@ -140,8 +140,8 @@
   `_with_context_note` puts before the latest question, for that request only (not saved in history). So
   instructions + tools + earlier turns stay identical and can be cached. Groq: cached tokens don't count
   toward its per-minute limit (docs). Gemini free tier limits requests, not tokens, so there it's only a
-  possible speed-up. Log line "<model> tokens: prompt N (cached M)". Checked live 2026-11-18: Groq's
-  free account reports no cached tokens at all (no prompt_tokens_details), so caching doesn't help there.
+  possible speed-up. Log line "<model> tokens: prompt N (cached M)". Checked live 2026-11-18: Groq
+  sometimes reports 512 cached tokens, often 0; a small help at best.
 - Smart tool list (`smart_tools`, default on, checkbox on the settings main page): each PC module has a
   `TOPICS` list (topic, words regex or function, tool names, optional send_all), registered by
   `__main__.load_modules`. `Registry.pick_tools` sends only matching topics + topics used in the last 3

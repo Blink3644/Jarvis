@@ -103,7 +103,8 @@ def test_real_modules_cover_common_requests():
                     ("set a timer for 5 minutes", "set_timer"), ("what's the weather like", "get_weather"),
                     ("remember my router password is on the fridge", "remember_note"),
                     ("how do I beat this boss", "look_at_screen"), ("open discord", "open_app"),
-                    ("skip this song", "media_control"), ("what time is it?", "get_time")]:
+                    ("skip this song", "media_control"), ("what time is it?", "get_time"),
+                    ("i like this song", "spotify_like_current")]:
         reg.begin_turn(q)
         assert reg.turn_tools is None or want in reg.turn_tools, (q, want)
         assert reg.turn_tools is not None, q            # and it did narrow the list
@@ -147,3 +148,15 @@ def test_brain_off_switch_sends_every_tool():
     b, fa = make_brain([("groq", text("Hi."))], smart=False)
     b.ask("play a song")
     assert {t["name"] for t in fa.calls[0][4]} == set(b.registry.tools)
+
+
+def test_like_in_a_question_is_not_about_music():
+    from jarvis.pc import spotify
+    reg = Registry()
+    for n in ("spotify_like_current", "get_weather"):
+        reg.register(tool(n))
+    for t in spotify.TOPICS:
+        reg.add_topic(t[0], t[1], [x for x in t[2] if x in reg.tools])
+    reg.add_topic("weather", r"weather", ["get_weather"])
+    reg.begin_turn("what's the weather like?")
+    assert "spotify_like_current" not in reg.turn_tools
