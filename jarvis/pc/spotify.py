@@ -407,7 +407,24 @@ def make_tools(cfg, client_fn=None, open_spotify=None, sleep=time.sleep, wait_s:
             return {"repeat": mode}
         return _run(go)
 
-    return {"spotify_play": spotify_play, "spotify_queue": spotify_queue,
+    def spotify_volume(percent=None, delta=None) -> dict:
+        def go():
+            c = client()
+            dev = (c.req("GET", "/me/player") or {}).get("device") or {}
+            if not dev:
+                raise NoDevice()
+            if dev.get("supports_volume") is False:
+                return {"error": f"Spotify can't change the volume on {dev.get('name') or 'that device'}."}
+            cur = dev.get("volume_percent")
+            if percent is None and delta is None:
+                return {"spotify_volume": cur}
+            new = float(percent) if percent is not None else (cur or 0) + float(delta)
+            new = max(0, min(100, int(round(new))))
+            c.req("PUT", "/me/player/volume", params={"volume_percent": new, "device_id": dev.get("id")})
+            return {"spotify_volume": new}
+        return _run(go)
+
+    return {"spotify_volume": spotify_volume, "spotify_play": spotify_play, "spotify_queue": spotify_queue,
             "spotify_now_playing": spotify_now_playing, "spotify_like_current": spotify_like_current,
             "spotify_shuffle": spotify_shuffle, "spotify_repeat": spotify_repeat}
 
@@ -417,7 +434,9 @@ TOPICS = [("music", r"spotify|play|playing|pause|resume|skip|next|previous|song|
                     r"tunes|playlist|playlists|album|artist|band|queue|shuffle|repeat|loop|like\s+(this|that|it)|liked|listen|"
                     r"listening|genre|vibe|vibes|funky|chill|jazz|rock|pop|rap|lofi|beat|beats",
             ["spotify_play", "spotify_queue", "spotify_shuffle", "spotify_repeat", "spotify_like_current",
-             "spotify_now_playing"])]
+             "spotify_now_playing", "spotify_volume"]),
+          ("music_volume", r"volume|louder|quieter|softer|mute|muted|unmute|loud|quiet|turn\s+(it|that|this|the\s+\w+)?"
+                           r"\s*(up|down)|crank|lower|raise", ["spotify_volume"])]
 
 
 def register(reg: Registry, cfg: dict) -> None:
@@ -446,3 +465,9 @@ def register(reg: Registry, cfg: dict) -> None:
     T("spotify_repeat", "Set Spotify repeat: off, track (repeat this song) or context (repeat the playlist/album).",
       {"type": "object", "properties": {"mode": {"type": "string", "enum": ["off", "track", "context"]}},
        "required": ["mode"]})
+    T("spotify_volume",
+      "Spotify's own volume (0-100), separate from the PC volume. Use this, not set_volume/change_volume, "
+      "whenever the user means the music, song or Spotify ('turn the music down', 'music louder', "
+      "'mute the music' = 0). Give percent to set it, delta (e.g. 10 or -10) to change it, or neither "
+      "to read it.",
+      {"type": "object", "properties": {"percent": {"type": "number"}, "delta": {"type": "number"}}})

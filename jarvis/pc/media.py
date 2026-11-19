@@ -103,11 +103,13 @@ def register(reg, cfg: dict) -> None:
 
     T(name="get_volume", side_effect=False, description="Get the current system volume (0-100) and whether it is muted.",
       handler=get_volume)
-    T(name="set_volume", description="Set the system volume to a percentage from 0 to 100.",
+    T(name="set_volume", description="Set the PC (system) volume to a percentage from 0 to 100. If the user means the "
+                                    "music or Spotify, use spotify_volume instead when it is available.",
       handler=lambda percent: set_volume(percent),
       parameters=obj({"percent": {"type": "number"}}, ["percent"]))
-    T(name="change_volume", description="Raise or lower the volume by a number of percentage points "
-                                       "(e.g. 10 or -10).",
+    T(name="change_volume", description="Raise or lower the PC (system) volume by a number of percentage points "
+                                       "(e.g. 10 or -10). If the user means the music or Spotify, use "
+                                       "spotify_volume instead when it is available.",
       handler=lambda delta: change_volume(delta),
       parameters=obj({"delta": {"type": "number"}}, ["delta"]))
     T(name="set_mute", description="Mute (true) or unmute (false) the system sound.",

@@ -335,3 +335,11 @@ def test_openai_adapter_logs_cached_tokens(caplog):
     with mock.patch("jarvis.core.providers._http", return_value=resp), caplog.at_level(logging.INFO):
         OpenAIAdapter({"base_url": "https://x"}).generate("k", "m", "sys", [], [])
     assert "prompt 3449 (cached 3072)" in caplog.text
+
+
+def test_all_providers_out_for_the_day_message_is_provider_neutral():
+    b, fa = make([(MAIN, quota()), (BACKUP, quota())],
+                 [("openai", ProviderError(429, "You exceeded your daily quota"))],
+                 [entry("openai", ["gpt-x"])])
+    r = b.ask("hi")
+    assert not r.ok and "out of requests" in r.text and "Pacific" not in r.text

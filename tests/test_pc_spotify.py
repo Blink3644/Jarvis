@@ -138,3 +138,34 @@ def test_client_id_override_and_availability(monkeypatch):
     assert sp.available({})
     monkeypatch.setattr(sp, "BUILTIN_CLIENT_ID", "")
     assert not sp.available({})
+
+
+def test_volume_set_change_read_and_clamp():
+    player = {"device": {"id": "pc", "name": "PC", "volume_percent": 50, "supports_volume": True}}
+    t, http = tools({("GET", "/me/player"): R(200, player)})
+    assert t["spotify_volume"](percent=30) == {"spotify_volume": 30}
+    assert ("PUT", "/me/player/volume", {"volume_percent": 30, "device_id": "pc"}, None) in http.calls
+    assert t["spotify_volume"](delta=-10) == {"spotify_volume": 40}
+    assert t["spotify_volume"](delta=80) == {"spotify_volume": 100}
+    assert t["spotify_volume"]() == {"spotify_volume": 50}
+
+
+def test_volume_no_device_and_unsupported_device():
+    t, _ = tools({("GET", "/me/player"): R(204)})
+    assert "isn't playing" in t["spotify_volume"](percent=20)["error"]
+    t, _ = tools({("GET", "/me/player"): R(200, {"device": {"id": "x", "name": "Speaker",
+                                                             "supports_volume": False}})})
+    assert "Speaker" in t["spotify_volume"](percent=20)["error"]
+
+
+def test_music_volume_words_pick_spotify_volume():
+    from jarvis.core.registry import Registry
+    from jarvis.pc import media
+    r = Registry()
+    media.register(r, {})
+    sp.register(r, {})
+    for mod in (media, sp):
+        for name, words, names in mod.TOPICS:
+            r.add_topic(name, words, names)
+    for said in ("turn the music down", "make the music louder", "spotify volume to 30"):
+        assert "spotify_volume" in r.pick_tools(said), said
