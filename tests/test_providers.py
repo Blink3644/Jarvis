@@ -273,3 +273,62 @@ def test_gemini_own_tool_calls_keep_structure():
     # an unsigned call that Gemini made itself (no id from another provider) is kept too
     own.parts[0].thought_signature = None
     assert _for_gemini([own, resp], {"call_1"})[0].parts[0].function_call
+
+
+# ---- cache-friendly requests for non-Gemini providers ----
+def test_other_providers_get_identical_instructions_and_a_context_note():
+    import datetime as dt
+    from unittest import mock
+    b, fa = make([(MAIN, quota()), (BACKUP, quota())],
+                 [("openai", call("get_time")), ("openai", text("noon")), ("openai", text("again"))],
+                 [entry("openai", ["gpt-x"])])
+    times = iter([dt.datetime(2026, 11, 18, 20, 1), dt.datetime(2026, 11, 18, 20, 2),
+                  dt.datetime(2026, 11, 18, 20, 3)] * 3)
+    systems = []
+    real = fa.factory
+
+    def spy(entry_):
+        a = real(entry_)
+        gen = a.generate
+
+        def g(key, model, system, contents, tools, timeout=30):
+            systems.append(system)
+            return gen(key, model, system, contents, tools, timeout)
+        a.generate = g
+        return a
+    b.adapter_factory = spy
+    with mock.patch("jarvis.core.personality.datetime") as d:
+        d.datetime.now.side_effect = lambda: next(times)
+        b.ask("what time is it?")
+        b.ask("and now?")
+    assert len(set(systems)) == 1 and "20:0" not in systems[0]      # fixed, no clock in it
+    for _, _, _, contents, _ in fa.calls:
+        latest = [c for c in contents if c.role == "user" and c.parts[0].text][-1]
+        assert latest.parts[0].text.startswith("[Context]") and "20:0" in latest.parts[0].text
+    # the tool round sends the note in front of the question, not after the tool result
+    assert fa.calls[1][3][-1].parts[0].function_response
+    # earlier turns go back without the note, so the start of each request stays the same
+    third = fa.calls[2][3]
+    assert third[0].parts[0].text == "what time is it?"
+    assert not any("[Context]" in (p.text or "") for p in b.conv.contents()[0].parts)
+
+
+def test_gemini_still_gets_everything_in_system_instruction():
+    b, fa, client, _ = make_groq_first([(MAIN, text_chunks("hi"))], [("groq", groq_tpm("30s")),
+                                                                      ("groq", groq_tpm("30s"))])
+    b.ask("hi")
+    cfgobj = client.models.calls[0][2]
+    assert "current local date and time" in cfgobj.system_instruction
+    assert client.models.calls[0][1][-1].parts[0].text == "hi"
+
+
+def test_openai_adapter_logs_cached_tokens(caplog):
+    import logging
+    from unittest import mock
+    from jarvis.core.providers import OpenAIAdapter
+    resp = {"choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 3449, "completion_tokens": 9,
+                      "prompt_tokens_details": {"cached_tokens": 3072}}}
+    with mock.patch("jarvis.core.providers._http", return_value=resp), caplog.at_level(logging.INFO):
+        OpenAIAdapter({"base_url": "https://x"}).generate("k", "m", "sys", [], [])
+    assert "prompt 3449 (cached 3072)" in caplog.text

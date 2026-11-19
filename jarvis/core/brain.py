@@ -16,7 +16,7 @@ from google.genai import errors, types
 
 from . import providers, secrets
 from .history import Conversation, HistoryStore, fallback_summary
-from .personality import system_prompt
+from .personality import split_prompt, system_prompt
 from .registry import Registry
 from .usage import Usage, next_reset
 
@@ -251,9 +251,12 @@ class Brain:
         if not api_key and not providers.PRESETS.get(entry.get("preset"), {}).get("no_key"):
             raise FriendlyError(f"I don't have an API key for {entry['name']} yet.")
         tools = self.registry.declarations()
-        system = system_prompt(self.cfg, self.registry.extra_context(), self.memory)
+        # Fixed instructions + tool list stay byte-identical between requests so Groq's prompt
+        # cache can reuse them (cached tokens don't count toward its per-minute limit).
+        system, note = split_prompt(self.cfg, self.registry.extra_context(), self.memory)
         timeout = self.cfg.get("main_timeout_s", 10) if quick else 30
-        parts = self.adapter_factory(entry).generate(api_key, model, system, contents, tools,
+        parts = self.adapter_factory(entry).generate(api_key, model, system,
+                                                     _with_context_note(contents, note), tools,
                                                      timeout=max(10, timeout))
         for p in parts:                 # remember these so Gemini gets them as text later
             if p.function_call:
@@ -393,6 +396,20 @@ def retry_after(e: Exception) -> float | None:
     if num:
         secs += float(num) / (1000 if unit.lower() == "ms" else 1)
     return secs
+
+
+def _with_context_note(contents: list[types.Content], note: str) -> list[types.Content]:
+    """Put the [Context] note in front of the user's latest question (the last user message
+    that has text, not tool results). Only for this request: it isn't saved in the history,
+    so earlier turns stay identical and cacheable."""
+    for i in range(len(contents) - 1, -1, -1):
+        c = contents[i]
+        if c.role == "user" and any(p.text for p in c.parts or []) \
+                and not any(p.function_response for p in c.parts or []):
+            out = list(contents)
+            out[i] = types.Content(role="user", parts=[types.Part(text=note)] + list(c.parts or []))
+            return out
+    return list(contents) + [types.Content(role="user", parts=[types.Part(text=note)])]
 
 
 def _for_gemini(contents: list[types.Content], foreign: set[str]) -> list[types.Content]:
