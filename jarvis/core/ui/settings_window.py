@@ -22,6 +22,7 @@ import os
 import threading
 
 from .. import config, paths, providers, secrets
+from jarvis.pc.timers import parse_clock
 
 log = logging.getLogger(__name__)
 
@@ -119,10 +120,21 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
         if v is not None:
             cfg["live_idle_seconds"] = v
     for k in ("wake_enabled", "ptt_enabled", "stop_word_enabled", "start_with_windows", "live_mode", "smart_tools",
-              "keep_debug_clips", "stt_gpu",
+              "keep_debug_clips", "stt_gpu", "morning_brief", "calendar_headsup",
               "calendar_enabled", "clickup_enabled"):
         if k in f:
             cfg[k] = bool(f[k])
+    if "morning_brief_time" in f:
+        t = str(f["morning_brief_time"] or "").strip()
+        hm = parse_clock(t)
+        if not hm:
+            errors.append("Morning brief time must look like 08:00 or 7:30 am.")
+        else:
+            cfg["morning_brief_time"] = f"{hm[0]:02d}:{hm[1]:02d}"
+    if "calendar_headsup_minutes" in f:
+        v = _num(f["calendar_headsup_minutes"], "Heads-up minutes", 1, 120, int, errors)
+        if v is not None:
+            cfg["calendar_headsup_minutes"] = v
     if "wake_model" in f:
         wm = str(f["wake_model"] or "").strip() or "hey_jarvis"
         if wm != "hey_jarvis" and (not wm.lower().endswith(".onnx") or "/" in wm or "\\" in wm):
@@ -402,6 +414,10 @@ class SettingsWindow:
         self._fill_usage()
         self._check(p, "start_with_windows", c["start_with_windows"], "Start Jarvis when Windows starts")
         self._menu(p, "startup_greeting", GREETING_LABELS, c["startup_greeting"], "Greeting at startup")
+        self._check(p, "morning_brief", c.get("morning_brief", False),
+                    "Morning brief: say the Daily brief (weather, calendar) at this time each day")
+        self._entry(p, "morning_brief_time", c.get("morning_brief_time", "08:00"),
+                    "Morning brief time (for example 08:00)", width=80)
         self._menu(p, "theme", THEME_LABELS, c["theme"], "Look of the on-screen panel")
 
     # ---------- AI providers tab ----------
@@ -845,6 +861,10 @@ class SettingsWindow:
                        "add events or tasks, and the 'Daily brief' greeting mentions today's.", wrap=640)
         self._label(p, "Google Calendar", bold=True)
         self._check(p, "calendar_enabled", c.get("calendar_enabled", False), "Use Google Calendar")
+        self._check(p, "calendar_headsup", c.get("calendar_headsup", False),
+                    "Heads-up: Jarvis says when an event is about to start (it only reads the title out)")
+        self._entry(p, "calendar_headsup_minutes", c.get("calendar_headsup_minutes", 10),
+                    "Minutes before the event", width=60)
         self.gcal_status = self._label(p, "")
         row = ctk.CTkFrame(p, fg_color="transparent")
         row.pack(fill="x", padx=8, pady=4)
