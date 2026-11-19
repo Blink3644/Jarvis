@@ -43,6 +43,7 @@ THEME_LABELS = {"hud": "HUD (glowing orb)", "minimal": "Minimal"}
 VOICES = ["en-GB-RyanNeural", "en-GB-ThomasNeural", "en-GB-SoniaNeural", "en-US-GuyNeural",
           "en-US-AriaNeural", "en-US-ChristopherNeural"]
 DEFAULT_DEVICE = "(Windows default)"
+ALL_GAMES = "All games"   # "What Jarvis knows": a fact that is not tied to one game
 
 
 # ---------------------------------------------------------------- pure logic
@@ -788,19 +789,25 @@ class SettingsWindow:
         self.knows_forget_btn.configure(state="normal" if facts else "disabled")
         if not facts:
             ctk.CTkLabel(self.knows_frame, text="Jarvis hasn't learned anything about you yet.").pack(anchor="w")
-        for f in facts:
+        # "All games" facts first, then each game's facts together; the game box can be typed in
+        games = [ALL_GAMES] + sorted({f["game"] for f in facts if f.get("game")}, key=str.lower)
+        for f in sorted(facts, key=lambda f: (str(f.get("game") or "").lower(), int(f.get("id", 0)))):
             row = ctk.CTkFrame(self.knows_frame)
             row.pack(fill="x", pady=2)
             v = ctk.StringVar(value=f["text"])
             ctk.CTkEntry(row, textvariable=v).pack(side="left", fill="x", expand=True, padx=4)
+            g = ctk.StringVar(value=f.get("game") or ALL_GAMES)
+            ctk.CTkComboBox(row, values=games, variable=g, width=130).pack(side="left", padx=2)
             ctk.CTkLabel(row, text=str(f.get("learned", ""))[:10], width=80).pack(side="left")
             ctk.CTkButton(row, text="Save", width=56,
-                          command=lambda i=f["id"], v=v: self._knows_edit(i, v)).pack(side="left", padx=2)
+                          command=lambda i=f["id"], v=v, g=g: self._knows_edit(i, v, g)).pack(side="left", padx=2)
             ctk.CTkButton(row, text="Delete", width=56, fg_color="firebrick",
                           command=lambda i=f["id"]: self._knows_delete(i)).pack(side="left", padx=2)
 
-    def _knows_edit(self, fid, var):
-        problem = self.h.call("profile_update", fid, var.get(), default="Could not save that.")
+    def _knows_edit(self, fid, var, game_var=None):
+        game = () if game_var is None else (
+            "" if game_var.get().strip().lower() in ("", ALL_GAMES.lower()) else game_var.get().strip(),)
+        problem = self.h.call("profile_update", fid, var.get(), *game, default="Could not save that.")
         self._say(problem or "Saved.")
         self._fill_knows()
 

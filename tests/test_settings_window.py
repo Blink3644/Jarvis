@@ -138,3 +138,25 @@ def test_knows_tab_without_hooks(monkeypatch):
         assert win.knows_forget_btn.cget("state") == "disabled"
     finally:
         win.close()
+
+
+def test_knows_tab_shows_and_changes_a_facts_game():
+    from jarvis.pc import profile
+    profile.add_facts(["The user's dog is called Max.", ("The user is doing a strength build.", "Elden Ring")])
+    hooks = {"profile_facts": profile.load_facts, "profile_update": profile.update_fact}
+    try:
+        win = sw.SettingsWindow(None, dict(config.DEFAULTS), hooks, hidden=True)
+    except Exception as e:  # no display / Tk problem
+        pytest.skip(f"Tk unavailable: {e}")
+    try:
+        rows = win.knows_frame.winfo_children()
+        boxes = [w for r in rows for w in r.winfo_children() if w.__class__.__name__ == "CTkComboBox"]
+        assert [b.get() for b in boxes] == ["All games", "Elden Ring"]    # general first, then by game
+        v = lambda s: type("V", (), {"get": lambda self: s})()           # noqa: E731
+        fid = [f for f in profile.load_facts() if f.get("game")][0]["id"]
+        win._knows_edit(fid, v("The user is doing a strength build."), v("Elden Ring Nightreign"))
+        assert profile.load_facts()[1]["game"] == "Elden Ring Nightreign"
+        win._knows_edit(fid, v("The user is doing a strength build."), v("All games"))
+        assert "game" not in profile.load_facts()[1]
+    finally:
+        win.close()
