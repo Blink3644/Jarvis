@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import socket
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -22,6 +23,7 @@ from .usage import Usage, next_reset
 
 log = logging.getLogger(__name__)
 MAX_TOOL_ROUNDS = 6
+LEARN_EVERY = 8          # "learn about me": check for new facts after this many questions
 BACKUP_NOTICE = "Switching to my backup brain for a bit."
 
 
@@ -105,6 +107,7 @@ class Brain:
         self._client = None
         self._client_key = None
         self.memory = self.history.load_summaries()
+        self._learned_upto = 0              # transcript entries already checked for facts about the user
 
     # ---------- public ----------
     def ask(self, text: str, on_text: Callable[[str], None] | None = None,
@@ -155,13 +158,47 @@ class Brain:
         self.registry.last_reply = final
         self.history.log_line("You", text)
         self.history.log_line("Jarvis", final)
+        self._maybe_learn()
         return Reply(final, notices=notices, tools_used=tools_used)
 
     def clear_conversation(self) -> None:
+        self._maybe_learn(force=True, wait=False)
         self.conv.clear()
+        self._learned_upto = 0
+
+    # ---------- "learn about me" (the learner lives in pc/profile.py) ----------
+    def _maybe_learn(self, force: bool = False, wait: bool = False) -> None:
+        """After a conversation ends (or every LEARN_EVERY questions), pick out lasting facts about
+        the user from what they said. One small request to the backup model, in the background."""
+        learner = getattr(self.registry, "learner", None)
+        if learner is None:
+            return
+        new = self.conv.transcript[self._learned_upto:]
+        asked = sum(1 for who, _ in new if who == "You")
+        if not asked or not (force or self.registry.conversation_over or asked >= LEARN_EVERY):
+            return
+        self._learned_upto = len(self.conv.transcript)
+        if wait:
+            self._learn(learner, new)
+        else:
+            threading.Thread(target=self._learn, args=(learner, new), name="learn", daemon=True).start()
+
+    def _learn(self, learner, transcript) -> None:
+        def generate(prompt: str) -> str:
+            model = self.cfg["model_fallback"]
+            if not self._available(model):
+                raise FriendlyError("no quota")
+            resp = self._get_client().models.generate_content(model=model, contents=prompt)
+            self.usage.record(model)
+            return resp.text or ""
+        try:
+            learner(transcript, generate)
+        except Exception:
+            log.info("learning about the user failed; trying again next time", exc_info=True)
 
     def close(self) -> None:
         """Call on shutdown. In "remember" mode, store a short summary of this session."""
+        self._maybe_learn(force=True, wait=True)
         if self.history.mode != "remember" or not self.conv.transcript:
             return
         summary = ""
