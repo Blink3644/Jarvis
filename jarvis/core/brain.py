@@ -388,7 +388,10 @@ class Brain:
         if skipped_media and not any(providers.supports(e, need) for e, _, _ in slots):
             what = "pictures" if "image" in need else "audio"
             raise FriendlyError(f"None of my AI providers can handle {what}. Turn on Gemini in settings.")
-        raise FriendlyError("I've hit my limit for today. It resets at midnight Pacific time.")
+        if all(e.get("kind") == "gemini" for e, _, _ in slots):
+            raise FriendlyError("I've hit my limit for today. It resets at midnight Pacific time.")
+        raise FriendlyError("All my AI providers are out of requests for now. Try again later, "
+                            "or add another provider in settings.")
 
 
 def _message(kind: str, entry: dict, model: str) -> str:
@@ -489,7 +492,7 @@ def _without_media(exchange: list[types.Content]) -> list[types.Content]:
 _MESSAGES = {
     "bad_key": "My Gemini API key doesn't seem to work. Please check it in settings.",
     "model_missing": "Google doesn't recognise the model name {model}. Please pick another model in settings.",
-    "server": "Google's servers are having trouble right now. Try again in a moment.",
+    "server": "My AI provider's servers are having trouble right now. Try again in a moment.",
     "offline": "I can't reach the internet right now. Check your connection and try again.",
     "other": "Sorry, something went wrong talking to Gemini. The details are in the log.",
 }
