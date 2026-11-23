@@ -127,7 +127,9 @@
   routine names+steps go into the prompt context so "start my music" runs routine "start music" (verified live).
   after an open_app step it waits for the app window (max 20 s) + 2 s before the next step; `wait` tool for explicit pauses).
 - core/game_profiles.py + games.py (foreground exe vs libraries / game_list / fullscreen heuristic, context line),
-  screen.py (look_at_screen + auto-look "games"; mss.MSS; black-capture and never_screenshot checks),
+  screen.py (look_at_screen + auto-look "games"; mss.MSS; black-capture and never_screenshot checks;
+  `_NON_VISUAL` skips the screenshot for volume/music wording like "turn music up 20%", "down 10%", "louder",
+  otherwise the screenshot taints the turn and spotify_volume asks for a yes; logs "auto-look: screenshot attached"),
   listen.py (PyAudioWPatch loopback; only when the request asks to listen/hear/song; loopback gives no frames in silence).
 - clipboard.py (added 2026-11-17, waiting for the user's test): copy_to_clipboard(text | last_answer) via ctypes Win32,
   sets the clipboard only (never pastes/types), max 20k chars, text never logged; brain sets registry.last_reply.
