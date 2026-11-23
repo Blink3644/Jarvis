@@ -117,6 +117,27 @@ def test_nothing_playing_and_errors_are_plain():
     assert "Premium" in t["spotify_shuffle"](False)["error"]
 
 
+def test_403_says_the_real_reason():
+    # Premium account that isn't on the owner's Spotify app user list (Development Mode allowlist)
+    t, _ = tools({("PUT", "/me/player/shuffle"): R(403, {"error": {
+        "status": 403,
+        "message": "Check settings on developer.spotify.com/dashboard, the user may not be registered."}})})
+    err = t["spotify_shuffle"](False)["error"]
+    assert "isn't on the Jarvis Spotify app's user list" in err and "Premium" not in err
+    # Free account
+    t, _ = tools({("PUT", "/me/player/shuffle"): R(403, {"error": {
+        "status": 403, "message": "Player command failed: Premium required", "reason": "PREMIUM_REQUIRED"}})})
+    err = t["spotify_shuffle"](False)["error"]
+    assert "needs Spotify Premium" in err and "user list" not in err
+    # Body that isn't JSON: falls back to naming both causes, never crashes
+    class Bad(R):
+        def json(self):
+            raise ValueError("not json")
+    t, _ = tools({("PUT", "/me/player/shuffle"): Bad(403, "x")})
+    err = t["spotify_shuffle"](False)["error"]
+    assert "Premium" in err and "user list" in err
+
+
 def test_401_refreshes_token_once():
     t, http = tools({("PUT", "/me/player/shuffle"): [R(401, {}), R(204)]})
     assert t["spotify_shuffle"](True) == {"shuffle": True}

@@ -216,9 +216,7 @@ class Client:
         if r.status_code == 404 and path.startswith("/me/player"):
             raise NoDevice()
         if r.status_code == 403:
-            log.warning("Spotify %s %s -> 403", method, path)
-            raise SpotifyError("Spotify refused that. Playback control needs Spotify Premium, and your "
-                               "account must be added to the Jarvis Spotify app.")
+            raise SpotifyError(forbidden_message(r, method, path))
         if r.status_code == 429:
             raise SpotifyError("Spotify says too many requests. Try again in a minute.")
         if r.status_code >= 400:
@@ -227,6 +225,31 @@ class Client:
         if r.status_code == 204 or not r.content:
             return {}
         return r.json()
+
+
+NOT_ON_LIST = ("Spotify refused that because your Spotify account isn't on the Jarvis Spotify app's user list. "
+               "Ask whoever shared Jarvis to add your Spotify email, or paste your own Client ID in settings, "
+               "then reconnect Spotify.")
+NEEDS_PREMIUM = "Spotify refused that. Playback control needs Spotify Premium."
+
+
+def forbidden_message(r, method: str, path: str) -> str:
+    """A 403 means either a free account (reason PREMIUM_REQUIRED) or, in Development Mode, an account
+    that isn't on the app's user list ("the user may not be registered"). Say which."""
+    try:
+        err = (r.json() or {}).get("error") or {}
+        if not isinstance(err, dict):
+            err = {"message": str(err)}
+    except Exception:
+        err = {}
+    reason, msg = str(err.get("reason") or ""), str(err.get("message") or "")
+    log.warning("Spotify %s %s -> 403 %s %s", method, path, reason, msg[:120])
+    if reason == "PREMIUM_REQUIRED" or "premium" in msg.lower():
+        return NEEDS_PREMIUM
+    if "regist" in msg.lower() or "dashboard" in msg.lower():
+        return NOT_ON_LIST
+    return ("Spotify refused that. Either the account isn't Premium, or it isn't on the Jarvis Spotify app's "
+            "user list (ask whoever shared Jarvis to add your Spotify email).")
 
 
 class NoDevice(SpotifyError):
