@@ -256,3 +256,38 @@ def test_muted_mic_ignores_wake_word():
         assert brain.asked == [] and va.state == A.IDLE
     finally:
         va.stop()
+
+
+def _followup_after_reply(follow_text):
+    va, mic, sp, brain, ui = make(["Jarvis play some music", follow_text], ["Playing.", "Sure."])
+    mic.feed(WAKE, *[SPEECH] * 10, *[SIL] * 12)
+    assert wait_for(lambda: va.state == A.FOLLOWUP)
+    mic.feed(*[SIL] * 8, *[SPEECH] * 10, *[SIL] * 12)     # clear "speech" (music) in the follow-up
+    return va, brain, ui
+
+
+def test_music_heard_in_followup_is_ignored():
+    va, brain, ui = _followup_after_reply("D" + "a" * 300)
+    try:
+        assert wait_for(lambda: va.state == A.IDLE)
+        assert brain.asked == ["play some music"]
+        assert ui.notices == []                           # quietly, no "I didn't catch that"
+    finally:
+        va.stop()
+
+
+def test_short_real_followup_still_works():
+    va, brain, ui = _followup_after_reply("Yes.")
+    try:
+        assert wait_for(lambda: brain.asked == ["play some music", "Yes."])
+    finally:
+        va.stop()
+
+
+def test_noise_filter_is_followup_only():
+    va, mic, sp, brain, ui = make(["Hey Jarvis la la la la"], ["That's a lovely tune, sir."])
+    try:
+        mic.feed(WAKE, *[SPEECH] * 10, *[SIL] * 12)
+        assert wait_for(lambda: brain.asked == ["la la la la"])   # wake turns are always meant
+    finally:
+        va.stop()

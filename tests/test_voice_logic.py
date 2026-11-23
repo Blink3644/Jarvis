@@ -70,3 +70,19 @@ def test_endpointer_ignores_clicks_and_times_out():
 def test_endpointer_max_length():
     ep = Endpointer(EndpointSettings(frame_ms=20, min_speech_ms=100, max_ms=1000))
     assert run(ep, [True] * 60) == DONE
+
+
+def test_looks_like_noise_catches_music_bleed():
+    from jarvis.core.voice.text import looks_like_noise
+    for junk in ["D" + "a" * 600, "Daaaaaa.", "la la la la", "Na na na na na.", "lalalala",
+                 "dadadada", "Ooh, aaah!", "...", "", "  ", "♪♪", "Mm-mm.", "Uh, um.", "hmm",
+                 "dum dum dum dum", "e", "Mmmmmmm"]:
+        assert looks_like_noise(junk), junk
+
+
+def test_looks_like_noise_keeps_real_short_replies():
+    from jarvis.core.voice.text import looks_like_noise
+    for real in ["Yes.", "No.", "Stop.", "Thanks.", "Thank you.", "What?", "50.", "Ok", "Yeah",
+                 "Mm-hmm.", "Uh-huh.", "Huh?", "no no no no", "stop stop stop stop", "Hey Jarvis",
+                 "down 10%.", "Set it to 25%.", "Yes, you should.", "go"]:
+        assert not looks_like_noise(real), real

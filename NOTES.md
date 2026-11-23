@@ -96,6 +96,11 @@
 - Wake: openwakeword 0.6.0 `hey_jarvis`, ONNX. threshold = 1 - wake_sensitivity. Paused while speaker busy + 0.5 s.
 - STT: faster-whisper `base.en` local CPU int8 (free, no quota, ~0.4 s); models in %APPDATA%/Jarvis/models/whisper. Hint words -> `hotwords`.
 - VAD: webrtcvad mode 3, 20 ms frames; endpoint.py (pure, tested). Follow-up needs 300 ms clear speech.
+- Follow-up noise filter: `text.looks_like_noise` drops follow-up transcripts with no real words (music bleed on a
+  Line In mic gave "Daaaa…": letter runs of 3+, "lalala"/"la la la la" loops, filler, punctuation, stray 1-2 letter
+  bits) and goes back to idle quietly (logs "follow-up ignored"). Follow-up only; wake/PTT turns are never filtered.
+  Real short replies (yes/no/stop/thanks/what?/numbers/mm-hmm) pass. Whisper's own no_speech/logprob cut is
+  unchanged (both engines); no stricter follow-up threshold yet, as the log has no values to tune it on.
 - TTS: edge-tts en-GB-RyanNeural (first call 1.4 s cold, ~0.6-0.8 s warm; warmed at startup) -> miniaudio decode -> sounddevice;
   pyttsx3 fallback (David) for 60 s after an edge failure.
 - Devices: WASAPI only, auto_convert; Stereo Mix / CABLE Output / loopback names filtered unless unlocked by name in cfg `allowed_virtual_mics` (user routes processed mic via VB-Cable; console `/mic N yes`, settings "Show virtual inputs"). **Every thread that opens a
