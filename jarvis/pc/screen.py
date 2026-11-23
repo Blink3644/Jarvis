@@ -15,7 +15,8 @@ _NON_VISUAL = re.compile(
     r"\b(volume|mute|unmute|timers?|alarms?|remind(er)?s?|notes?|remember|routines?|weather|"
     r"what('s| is) the (time|date)|what time|lock|shut ?down|restart|sleep|close|quit|"
     r"(open|launch|start)\s+\w+|(play|pause|resume|skip)\b|next (song|track)|previous (song|track)|"
-    r"turn (it )?(up|down)|clip (that|it)|save (that|a) (clip|replay))\b", re.I)
+    r"(turn|change) (\w+ ){0,3}(up|down)|louder|quieter|softer|crank|(up|down) (by )?(about |like )?\d+|"
+    r"(music|spotify|song|tunes) (back )?(up|down|to \d+)|clip (that|it)|save (that|a) (clip|replay))\b", re.I)
 
 
 _LOOK = re.compile(
@@ -143,6 +144,7 @@ def make_auto_look(cfg):
         if err:
             log.info("auto-look skipped: %s", err)
             return []
+        log.info("auto-look: screenshot attached (side-effect tools in this turn will ask for a yes)")
         return [media]
     return provider
 

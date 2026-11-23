@@ -2,7 +2,7 @@ import io
 
 from PIL import Image
 
-from jarvis.core.registry import Media, Registry
+from jarvis.core.registry import Media, Registry, Tool
 from jarvis.pc import games, screen
 
 
@@ -64,6 +64,47 @@ def test_auto_look_modes(monkeypatch):
     cfg["auto_look"] = "always"
     cur["v"] = None
     assert len(p("what's on my screen")) == 1
+
+
+MUSIC_VOLUME = ["Turn music up 20%", "Turn the music up 35%.", "turn my music down 45%", "Turn up my music 10%",
+                "Turn it up about 35%", "Turn it down to 60.", "down 10%.", "change my music up.",
+                "Turn that back up to 25.", "music louder", "make it quieter", "set my music to 30"]
+
+
+def test_music_volume_words_skip_auto_look():
+    for t in MUSIC_VOLUME:
+        assert screen.is_non_visual(t), t
+    for t in ["what's that up there", "how do I get up this cliff", "what does this button do"]:
+        assert not screen.is_non_visual(t), t
+
+
+def _gaming_registry(monkeypatch):
+    _patch(monkeypatch, Image.effect_noise((300, 300), 60).convert("RGB"))
+    monkeypatch.setattr(games, "current_game", lambda cfg=None, use_cache=True: {"name": "G"})
+    reg = Registry()
+    screen.register(reg, {"auto_look": "games"})
+    done = []
+    reg.register(Tool(name="spotify_volume", description="", handler=lambda **a: done.append(a) or {"ok": True}))
+    return reg, done
+
+
+def test_music_volume_while_gaming_needs_no_yes(monkeypatch):
+    # Real log: "Turn music up 20%" with a game focused took a screenshot, so the volume change asked for a yes.
+    reg, done = _gaming_registry(monkeypatch)
+    for t in MUSIC_VOLUME:
+        reg.begin_turn(t)
+        assert reg.attachments(t) == [], t
+        assert reg.call("spotify_volume", {"delta": 20}) == {"ok": True}, t
+    assert len(done) == len(MUSIC_VOLUME)
+
+
+def test_screenshot_turn_still_needs_yes(monkeypatch):
+    # The safety rule is unchanged: once a screenshot is attached, side effects still ask first.
+    reg, done = _gaming_registry(monkeypatch)
+    reg.begin_turn("what is this item")
+    assert len(reg.attachments("what is this item")) == 1
+    assert reg.call("spotify_volume", {"delta": 20})["status"] == "needs_confirmation"
+    assert done == []
 
 
 def test_register():
