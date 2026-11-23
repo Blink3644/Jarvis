@@ -20,6 +20,7 @@
   system prompt now asks for answer-first replies, spoken-style numbers, no URLs read aloud and short action
   confirmations (`jarvis/core/personality.py`). New `spotify_volume` tool (Spotify Web API `/me/player/volume`,
   Premium): "music/Spotify volume" goes to it, PC volume tools say so; topic `music_volume`. Still to polish: README/first run, overlay/tray, dead code.
+- Faster first reply (branch `faster-first-reply`, 2026-11-22): the slow first reply in the 2026-11-17 log was mostly `spotify_play` waiting up to 15 s for a closed Spotify to appear. Now it opens Spotify at the start (says "Opening Spotify, one moment." via `registry.announce`), searches while it starts and polls every 0.5 s. `registry.warm_ups` run once in background threads at startup (Gemini client, Spotify token). Every tool call logs `tool <name> took N.Ns` for future slowness checks. NOT verified on a real PC.
 
 ## Learn about me (2026-11-19) — `jarvis/pc/profile.py`, `Brain._maybe_learn`, `tests/test_pc_profile.py`
 - Opt-in `learn_about_me` (Settings > General, off by default). After a conversation ends (end_conversation,

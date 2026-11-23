@@ -278,8 +278,10 @@ def pick_device(devices: list[dict]):
 
 
 # ---------- tools ----------
-def make_tools(cfg, client_fn=None, open_spotify=None, sleep=time.sleep, wait_s: float = 15.0):
+def make_tools(cfg, client_fn=None, open_spotify=None, sleep=time.sleep, wait_s: float = 15.0,
+               announce=None):
     cache: dict = {}
+    poll_s = 0.5
 
     def client():
         if client_fn:
@@ -295,16 +297,24 @@ def make_tools(cfg, client_fn=None, open_spotify=None, sleep=time.sleep, wait_s:
         from jarvis.pc import apps
         return apps.open_app(cfg, "spotify")
 
-    def device_id(c) -> str:
-        d = pick_device(c.req("GET", "/me/player/devices").get("devices", []))
-        if d:
-            return d["id"]
+    def find_device(c):
+        return pick_device(c.req("GET", "/me/player/devices").get("devices", []))
+
+    def start_spotify() -> None:
+        """Spotify isn't running: say so (it can take 10+ s to start) and launch it."""
+        if announce:
+            try:
+                announce("Opening Spotify, one moment.")
+            except Exception:
+                log.debug("announce failed", exc_info=True)
         _open()
+
+    def wait_for_device(c) -> str:
         waited = 0.0
         while waited < wait_s:
-            sleep(1.0)
-            waited += 1.0
-            d = pick_device(c.req("GET", "/me/player/devices").get("devices", []))
+            sleep(poll_s)
+            waited += poll_s
+            d = find_device(c)
             if d:
                 return d["id"]
         raise SpotifyError("I opened Spotify but it didn't show up in time. Try again in a few seconds.")
@@ -335,6 +345,10 @@ def make_tools(cfg, client_fn=None, open_spotify=None, sleep=time.sleep, wait_s:
 
         def go():
             c = client()
+            # Start Spotify first (if it's closed) so it loads while we search.
+            dev = find_device(c)
+            if not dev:
+                start_spotify()
             if kind == "my_playlist":
                 item = find_by_name(my_playlists(c), query)
                 if not item:
@@ -345,7 +359,8 @@ def make_tools(cfg, client_fn=None, open_spotify=None, sleep=time.sleep, wait_s:
                 if not item:
                     return {"error": f"Spotify found nothing for {query}."}
             body = {"uris": [item["uri"]]} if kind == "song" else {"context_uri": item["uri"]}
-            c.req("PUT", "/me/player/play", params={"device_id": device_id(c)}, json=body)
+            dev_id = dev["id"] if dev else wait_for_device(c)
+            c.req("PUT", "/me/player/play", params={"device_id": dev_id}, json=body)
             return {"playing": describe(item), "kind": kind}
         return _run(go)
 
@@ -424,7 +439,17 @@ def make_tools(cfg, client_fn=None, open_spotify=None, sleep=time.sleep, wait_s:
             return {"spotify_volume": new}
         return _run(go)
 
-    return {"spotify_volume": spotify_volume, "spotify_play": spotify_play, "spotify_queue": spotify_queue,
+    def warm_up() -> None:
+        """Fetch a fresh access token in the background at startup, so the first music
+        request doesn't wait for it."""
+        try:
+            if not client_fn and available(cfg):
+                client()._token()
+        except Exception:
+            log.info("Spotify warm-up skipped", exc_info=True)
+
+    return {"_warm_up": warm_up,
+            "spotify_volume": spotify_volume, "spotify_play": spotify_play, "spotify_queue": spotify_queue,
             "spotify_now_playing": spotify_now_playing, "spotify_like_current": spotify_like_current,
             "spotify_shuffle": spotify_shuffle, "spotify_repeat": spotify_repeat}
 
@@ -440,8 +465,9 @@ TOPICS = [("music", r"spotify|play|playing|pause|resume|skip|next|previous|song|
 
 
 def register(reg: Registry, cfg: dict) -> None:
-    t = make_tools(cfg)
+    t = make_tools(cfg, announce=lambda text: reg.announce(text))   # late-bound: the front end sets it
     is_on = lambda: available(cfg)   # noqa: E731
+    reg.warm_ups.append(t["_warm_up"])      # run in the background by __main__ at startup
 
     def T(name, description, parameters=None, **kw):
         reg.register(Tool(name=name, description=description, handler=t[name],

@@ -315,6 +315,8 @@ def main():
     cfg = config.load()
     load_modules(cfg)
     brain = Brain(cfg, registry)
+    registry.warm_ups.append(brain.warm_up)
+    registry.run_warm_ups()             # background: first request doesn't pay for setup
     if gui:
         return run_gui(cfg, brain)
     print(f"Jarvis console test. Main model: {cfg['model_main']}, backup: {cfg['model_fallback']}.")

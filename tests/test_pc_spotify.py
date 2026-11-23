@@ -169,3 +169,41 @@ def test_music_volume_words_pick_spotify_volume():
             r.add_topic(name, words, names)
     for said in ("turn the music down", "make the music louder", "spotify volume to 30"):
         assert "spotify_volume" in r.pick_tools(said), said
+
+
+def test_closed_spotify_is_opened_before_searching_and_announced():
+    order, said = [], []
+    http = FakeHttp({("GET", "/search"): R(200, {"tracks": {"items": [{"uri": "u", "name": "x"}]}}),
+                     ("GET", "/me/player/devices"): [R(200, {"devices": []}), R(200, PC)]})
+    real_request = http.request
+
+    def request(method, url, **kw):
+        order.append(url.replace(sp.API, ""))
+        return real_request(method, url, **kw)
+    http.request = request
+    c = sp.Client("cid", http=http, refresh_fn=lambda: "RT", save_fn=lambda t: None)
+    t = sp.make_tools({}, client_fn=lambda: c, sleep=lambda s: None, wait_s=3,
+                      open_spotify=lambda: order.append("OPEN"), announce=said.append)
+    assert t["spotify_play"]("x")["playing"] == "x"
+    assert order.index("OPEN") < order.index("/search")      # Spotify loads while we search
+    assert said == ["Opening Spotify, one moment."]
+    assert ("PUT", "/me/player/play", {"device_id": "pc"}, {"uris": ["u"]}) in http.calls
+
+
+def test_running_spotify_is_not_announced():
+    said = []
+    http = FakeHttp({("GET", "/search"): R(200, {"tracks": {"items": [{"uri": "u", "name": "x"}]}}),
+                     ("GET", "/me/player/devices"): R(200, PC)})
+    c = sp.Client("cid", http=http, refresh_fn=lambda: "RT", save_fn=lambda t: None)
+    t = sp.make_tools({}, client_fn=lambda: c, open_spotify=lambda: None, announce=said.append)
+    t["spotify_play"]("x")
+    assert said == []
+
+
+def test_register_adds_a_warm_up_and_warm_ups_never_raise():
+    from jarvis.core.registry import Registry
+    reg = Registry()
+    sp.register(reg, {})
+    assert reg.warm_ups
+    reg.warm_ups[:] = [lambda: 1 / 0]
+    reg.run_warm_ups()          # a failing warm-up is logged, not raised
