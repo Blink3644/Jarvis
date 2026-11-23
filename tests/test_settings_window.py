@@ -83,6 +83,23 @@ def test_build_cfg_live_mode():
     assert errors
 
 
+@pytest.mark.parametrize("name", ["gemini-3.8-live", "gemini-3.1-flash-live-preview",
+                                  "gemini-2.5-flash-native-audio-preview", "Gemini-Live-2.0"])
+def test_live_only_models_rejected_as_normal_models(name):
+    # A Live model in the normal model box gave "404 not found" on every request (real log, 2026-11-17).
+    assert sw.is_live_only_model(name)
+    for key in ("model_main", "model_fallback"):
+        _, errors = sw.build_cfg(dict(config.DEFAULTS), {key: name})
+        assert errors and "Live model box" in errors[0]
+    cfg, errors = sw.build_cfg(dict(config.DEFAULTS), {"live_model": name})
+    assert errors == [] and cfg["live_model"] == name
+
+
+@pytest.mark.parametrize("name", ["gemini-3.8-flash", "gemini-3.5-flash-lite", "deliverance-7b", "olive-model"])
+def test_normal_models_not_mistaken_for_live(name):
+    assert not sw.is_live_only_model(name)
+
+
 def test_window_shows_found_update(monkeypatch):
     from jarvis.core import updater
     info = updater.UpdateInfo("9.9.9", "Better wake word.", "https://x", None, None, "https://p")

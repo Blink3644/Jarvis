@@ -20,6 +20,7 @@ import copy
 import json
 import logging
 import os
+import re
 import threading
 
 from .. import config, paths, providers, secrets
@@ -137,6 +138,13 @@ def _num(raw, name, lo, hi, cast, errors):
     return v
 
 
+def is_live_only_model(name: str) -> bool:
+    """Gemini Live models (e.g. gemini-3.8-live, *-native-audio-*) can't answer normal requests:
+    Google returns 404 'not found' for them (seen in a real log 2026-11-17)."""
+    parts = re.split(r"[-_.]", (name or "").lower())
+    return "live" in parts or ("native" in parts and "audio" in parts)
+
+
 def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
     """Turn raw form values into a new cfg. Returns (cfg, errors). `base` is not modified.
 
@@ -153,6 +161,10 @@ def build_cfg(base: dict, form: dict) -> tuple[dict, list[str]]:
     for k in ("model_main", "model_fallback", "tts_voice", "ptt_key"):
         if k in f and not cfg[k]:
             errors.append(f"'{k.replace('_', ' ')}' can't be empty.")
+    for k, label in (("model_main", "Main model"), ("model_fallback", "Backup model")):
+        if k in f and is_live_only_model(cfg[k]):
+            errors.append(f"{label}: '{cfg[k]}' only works in Live mode. Put it in the Live model box "
+                          f"instead, and use a normal model here (e.g. gemini-3.8-flash).")
     for k, allowed in (("personality", config.PERSONALITIES), ("history_mode", config.HISTORY_MODES),
                        ("reply_mode", config.REPLY_MODES), ("auto_look", tuple(AUTO_LOOK_LABELS)),
                        ("stt_model", config.STT_MODELS),

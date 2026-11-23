@@ -402,8 +402,11 @@ class VoiceAssistant:
             self.ui.notice("Live mode dropped out. Say Hey Jarvis to carry on.")
             self._end_live()
             return
-        why = {"quota": "I've hit the Live limit", "key": "Live mode isn't allowed with this key"}.get(
-            kind, "I couldn't connect to Live mode")
+        # Google sends the same "quota" error when a key has no Live allowance at all (common on free keys)
+        # and when today's limit is used up, so the message covers both.
+        why = {"quota": "Google says Live mode is out of quota on this key (free keys may not include it, "
+                        "or today's limit is used up)",
+               "key": "Live mode isn't allowed with this key"}.get(kind, "I couldn't connect to Live mode")
         self.ui.notice(f"{why}, so I'm using normal mode.")
         if self.state != LIVE:
             return
