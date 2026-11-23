@@ -19,7 +19,8 @@ from jarvis.core.secrets import redact
 from .endpoint import DONE, SPEAKING, TIMEOUT, EndpointSettings, Endpointer
 from jarvis.core.personality import sign_off
 
-from .text import SentenceSplitter, is_closing_remark, is_stop_command, strip_wake_command
+from .text import (SentenceSplitter, is_closing_remark, is_stop_command, looks_like_noise,
+                   strip_wake_command)
 
 log = logging.getLogger(__name__)
 
@@ -523,6 +524,11 @@ class VoiceAssistant:
             except Exception:
                 log.warning("couldn't save the debug clip", exc_info=True)
         if turn["cancelled"]:
+            return
+        if source == "followup" and looks_like_noise(text):
+            # Music or game audio bleeding into the mic, not the user: go back to waiting quietly.
+            if text.strip():
+                log.info("follow-up ignored: sounded like music or noise, not words")
             return
         if (source != "followup" or _meaningful(text)) and is_closing_remark(text) \
                 and self._can_close_locally():

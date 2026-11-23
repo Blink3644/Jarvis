@@ -98,6 +98,50 @@ def is_closing_remark(text: str) -> bool:
     return bool(_CLOSING.match(t))
 
 
+# Follow-up listening has no wake word, so music or game audio bleeding into the mic can reach
+# speech-to-text, which turns it into "Daaaaaa..." or "la la la la". These checks only run on
+# follow-up turns: wake-word and push-to-talk turns are always treated as meant.
+_FILLER = {"uh", "um", "umm", "uhm", "er", "erm", "ah", "ahh", "oh", "ooh", "hm", "hmm", "mm",
+           "mmm", "mm mm", "la", "na", "da", "ba", "doo", "dum", "woo", "whoa", "oh oh", "ha"}
+_REAL_SOUNDS = {"mm hmm", "uh huh", "uh uh", "mhm", "hmm hmm"}   # spoken yes / no
+_SHORT_WORDS = {"ok", "no", "hi", "go", "up", "on", "yo", "ya", "ye", "me", "it", "do", "so",
+                "is", "be", "we", "he", "my", "to", "in", "at", "if", "or", "an", "us", "i"}
+_KEEP_REPEATS = {"no", "yes", "yeah", "yep", "nope", "stop", "ok", "okay", "go", "up", "down",
+                 "next", "back", "wait", "more", "louder", "quieter"}
+_LONG_RUN = re.compile(r"([a-z])\1{2,}")            # one letter 3+ times in a row (no English word does): "daaa"
+_SYLLABLE_LOOP = re.compile(r"^([a-z]{1,3})\1{2,}$")   # "lalala", "dadadada", "nanana"
+
+
+def _junk_word(w: str) -> bool:
+    if w.isdigit():
+        return False
+    return (w in _FILLER or bool(_LONG_RUN.search(w)) or bool(_SYLLABLE_LOOP.match(w))
+            or len(w) > 25 or (len(w) <= 2 and w not in _SHORT_WORDS))
+
+
+def looks_like_noise(text: str) -> bool:
+    """True when a follow-up transcript has no real words: hummed/sung music, filler, punctuation.
+
+    Real short replies ('yes', 'no', 'stop', 'thanks', 'what?', '50') are not noise.
+    """
+    t = (text or "").lower().replace("’", "'").replace("-", " ")
+    t = re.sub(r"[^a-z0-9' ]", " ", t)
+    words = t.split()
+    if not words:
+        return True                                    # only punctuation or nothing at all
+    if " ".join(words) in _REAL_SOUNDS:
+        return False
+    if " ".join(words) in _FILLER:
+        return True                                    # "mm mm", "oh oh"
+    if all(_junk_word(w) for w in words):
+        return True                                    # "Daaaa", "la la la", "ooh aaah"
+    # one short sound looped, e.g. "na na na na" / "dum dum dum dum", but not "no no no no"
+    if len(words) >= 4 and len(set(words)) == 1 and len(words[0]) <= 4 \
+            and words[0] not in _KEEP_REPEATS:
+        return True
+    return False
+
+
 def strip_wake_words(text: str) -> str:
     """'Hey Jarvis, what time is it?' -> 'what time is it?'"""
     return _WAKE_PREFIX.sub("", text.strip()).strip()
