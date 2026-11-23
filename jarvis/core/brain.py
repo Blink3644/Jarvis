@@ -138,7 +138,9 @@ class Brain:
                 for fc in calls:
                     tools_used.append(fc.name)
                     log.info("tool call: %s", fc.name)
+                    t0 = time.monotonic()
                     result = self.registry.call(fc.name, dict(fc.args or {}))
+                    log.info("tool %s took %.1fs", fc.name, time.monotonic() - t0)
                     media = result.pop("_media", None) or []
                     responses.append(types.Part(function_response=types.FunctionResponse(
                         id=fc.id, name=fc.name, response=result)))
@@ -221,6 +223,11 @@ class Brain:
 
     def status(self) -> str:
         return "backup" if self.on_backup else "main"
+
+    def warm_up(self) -> None:
+        """Build the Gemini client ahead of the first question (run in the background at startup)."""
+        if self.get_key():
+            self._get_client()
 
     # ---------- internals ----------
     def _get_client(self):

@@ -60,6 +60,9 @@ class Registry:
         self.context_providers: list[Callable[[], str]] = []
         self.hint_words: set[str] = set()
         self.attachment_providers: list[Callable[[str], list[Media]]] = []
+        # Slow one-off setup (e.g. fetching a login token) that modules want done before the first
+        # request; run_warm_ups() starts them in the background at startup.
+        self.warm_ups: list[Callable[[], None]] = []
         # set by the front end: speak + show text later (timers); UI events (e.g. "pc_audio", {"on": True})
         self.announce: Callable[[str], None] = lambda text: log.info("announce: %s", text)
         self.ui_event: Callable[[str, dict], None] = lambda name, data: log.debug("ui event %s %s", name, data)
@@ -102,6 +105,15 @@ class Registry:
         ))
 
     # ---------- turns & confirmations ----------
+    def run_warm_ups(self) -> None:
+        def run(fn):
+            try:
+                fn()
+            except Exception:
+                log.info("warm-up failed (not a problem)", exc_info=True)
+        for fn in self.warm_ups:
+            threading.Thread(target=run, args=(fn,), name="warm-up", daemon=True).start()
+
     def begin_turn(self, user_text: str) -> None:
         """Called by the brain at the start of every user request."""
         self.turn += 1
